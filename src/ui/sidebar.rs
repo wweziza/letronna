@@ -69,7 +69,16 @@ impl Chat {
             .text_sm()
             .when(active, |this| this.bg(cx.theme().sidebar_accent))
             .hover(|s| s.bg(cx.theme().sidebar_accent.opacity(0.6)))
-            .child(
+            .child(if c.pinned {
+                Icon::new(AppIcon::Pin)
+                    .size_3()
+                    .text_color(if active {
+                        cx.theme().primary
+                    } else {
+                        cx.theme().muted_foreground
+                    })
+                    .into_any_element()
+            } else {
                 div()
                     .size(px(4.))
                     .rounded_full()
@@ -78,8 +87,9 @@ impl Chat {
                         cx.theme().primary
                     } else {
                         cx.theme().muted_foreground.opacity(0.5)
-                    }),
-            )
+                    })
+                    .into_any_element()
+            })
             .child(div().flex_1().min_w_0().truncate().child(c.title.clone()))
             .child(
                 div()
@@ -120,6 +130,9 @@ impl Chat {
             .filter(|&i| self.store.conversations[i].pinned)
             .collect();
         let mut sessions = v_flex().gap_0p5();
+        for &i in &pinned {
+            sessions = sessions.child(self.session_row(i, now, cx));
+        }
         let mut last_bucket = "";
         for &i in visible
             .iter()
@@ -140,11 +153,6 @@ impl Chat {
                 );
             }
             sessions = sessions.child(self.session_row(i, now, cx));
-        }
-        let has_pinned = !pinned.is_empty();
-        let mut pinned_list = v_flex().gap_0p5();
-        for i in pinned {
-            pinned_list = pinned_list.child(self.session_row(i, now, cx));
         }
 
         v_flex()
@@ -215,9 +223,6 @@ impl Chat {
                     .min_h_0()
                     .overflow_y_scroll()
                     .px_2()
-                    .when(has_pinned, |this| {
-                        this.child(self.section("Pinned", cx)).child(pinned_list)
-                    })
                     .child(self.section("Sessions", cx))
                     .child(sessions),
             )
