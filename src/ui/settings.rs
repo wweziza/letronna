@@ -189,53 +189,57 @@ fn label(text: &'static str, cx: &App) -> Div {
 
 fn about_page(cx: &App) -> Div {
     let muted = cx.theme().muted_foreground;
-    v_flex().gap_6().child(heading("About", "", cx)).child(
-        h_flex()
-            .gap_6()
-            .items_start()
-            .child(
-                img("images/letronna.png")
-                    .size(px(160.))
-                    .rounded(cx.theme().radius_lg)
-                    .flex_shrink_0(),
-            )
-            .child(
-                v_flex()
-                    .gap_2()
-                    .child(
-                        div()
-                            .font_family(WORDMARK_FONT)
-                            .italic()
-                            .text_size(px(34.))
-                            .child(BRAND),
-                    )
-                    .child(div().text_sm().text_color(muted).child(concat!(
-                        "Version ",
-                        env!("CARGO_PKG_VERSION"),
-                        "  ·  build ",
-                        env!("GIT_HASH")
-                    )))
-                    .child(div().text_sm().pt_2().child(
-                        "A small native desktop agent. Rust, GPU rendered, no browser inside.",
-                    ))
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(muted)
-                            .child("Developed by the Gadlus Engineering team."),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(muted)
-                            .pt_4()
-                            .child("© 2026 Gadlus Engineering. Released under the MIT License."),
-                    )
-                    .child(div().text_xs().text_color(muted).child(
-                        "Built with GPUI and gpui-component (Apache-2.0). Icons by Phosphor (MIT).",
-                    )),
+    let line =
+        |text: &'static str, size: f32| div().text_size(px(size)).text_color(muted).child(text);
+    v_flex()
+        .size_full()
+        .items_center()
+        .justify_center()
+        .gap_2()
+        .text_center()
+        .child(
+            img("images/letronna.png")
+                .size(px(150.))
+                .rounded(cx.theme().radius_lg)
+                .mb_3(),
+        )
+        .child(
+            div()
+                .font_family(WORDMARK_FONT)
+                .italic()
+                .text_size(px(36.))
+                .child(BRAND),
+        )
+        .child(line(
+            concat!(
+                "Version ",
+                env!("CARGO_PKG_VERSION"),
+                "  ·  build ",
+                env!("GIT_HASH")
             ),
-    )
+            13.,
+        ))
+        .child(
+            div()
+                .text_sm()
+                .pt_3()
+                .child("A small native desktop agent. Rust, GPU rendered, no browser inside."),
+        )
+        .child(line("Developed by the Gadlus Engineering team.", 13.))
+        .child(
+            v_flex()
+                .pt_6()
+                .gap_1()
+                .items_center()
+                .child(line(
+                    "© 2026 Gadlus Engineering. Released under the MIT License.",
+                    12.,
+                ))
+                .child(line(
+                    "Built with GPUI and gpui-component (Apache-2.0). Icons by Phosphor (MIT).",
+                    12.,
+                )),
+        )
 }
 
 fn text_page(title: &'static str, blurb: &'static str, cx: &App) -> Div {

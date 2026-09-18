@@ -194,7 +194,7 @@ impl Chat {
             )
             .child(
                 div().px_2().pt_3().child(
-                    Input::new(&self.search).xsmall().prefix(
+                    Input::new(&self.search).xsmall().h(px(28.)).px_2().prefix(
                         Icon::new(AppIcon::Search)
                             .size_3()
                             .text_color(cx.theme().muted_foreground),
