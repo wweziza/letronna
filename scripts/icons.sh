@@ -15,7 +15,7 @@ chevron-down:caret-down chevron-right:caret-right check:check loader-circle:circ
 inbox:tray send:paper-plane-tilt sparkles:sparkle message-square:chat-teardrop file:file file-text:file-text clock:clock
 search:magnifying-glass pin:push-pin folder:folder image:image square-pen:note-pencil list-filter:funnel-simple
 info:info plugs:plugs palette:palette trash:trash export:export pencil:pencil-simple
-circle-x:x-circle circle-check:check-circle triangle-alert:warning shield:shield-check"
+circle-x:x-circle circle-check:check-circle triangle-alert:warning shield:shield-check puzzle:puzzle-piece"
 for pair in $map; do
   cp "$src/${pair#*:}-light.svg" "assets/icons/${pair%%:*}.svg"
 done

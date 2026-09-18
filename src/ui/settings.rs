@@ -7,6 +7,7 @@ const PAGES: &[(&str, AppIcon)] = &[
     ("Model", AppIcon::Robot),
     ("Appearance", AppIcon::Palette),
     ("Privacy", AppIcon::Shield),
+    ("Plugins", AppIcon::Puzzle),
     ("About", AppIcon::Info),
 ];
 
@@ -116,31 +117,26 @@ impl Chat {
                     })
                 },
             );
-        let panel = self.settings_panel(window, cx).with_animation(
-            if closing { "panel-out" } else { "panel-in" },
-            anim(),
-            move |el, delta| {
-                let p = if closing { 1. - delta } else { delta };
-                el.opacity(p).top(px(-14. * (1. - p)))
-            },
-        );
+        let panel = self
+            .settings_panel(window, cx)
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .with_animation(
+                if closing { "panel-out" } else { "panel-in" },
+                anim(),
+                move |el, delta| {
+                    let p = if closing { 1. - delta } else { delta };
+                    el.opacity(p).mt(px(-14. * (1. - p)))
+                },
+            );
         Some(
             div()
                 .absolute()
                 .size_full()
                 .flex()
-                .items_start()
+                .items_center()
                 .justify_center()
                 .child(scrim)
-                .child(
-                    div()
-                        .relative()
-                        .size_full()
-                        .flex()
-                        .items_start()
-                        .justify_center()
-                        .child(panel),
-                )
+                .child(panel)
                 .into_any_element(),
         )
     }
@@ -208,11 +204,11 @@ impl Chat {
             )
             .into_any_element(),
             "Privacy" => privacy_page(&chat, &presence, cx).into_any_element(),
+            "Plugins" => plugins_page(cx).into_any_element(),
             "About" => about_page(cx).into_any_element(),
             _ => gateway_page(&pick, &endpoint, &key, &chat, cx).into_any_element(),
         };
         div()
-            .mt((gap - gpui_component::TITLE_BAR_HEIGHT).max(px(0.)))
             .w(vp.width - gap * 2.)
             .bg(cx.theme().background)
             .border_1()
@@ -262,6 +258,50 @@ impl Chat {
                     ),
             )
     }
+}
+
+fn plugins_page(cx: &App) -> Div {
+    let card = |name: &'static str, blurb: &'static str, status: &'static str| {
+        h_flex()
+            .items_center()
+            .justify_between()
+            .p_3()
+            .rounded(cx.theme().radius)
+            .bg(cx.theme().secondary.opacity(0.3))
+            .child(
+                v_flex()
+                    .gap_0p5()
+                    .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(name))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(blurb),
+                    ),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .px_2()
+                    .py_0p5()
+                    .rounded(cx.theme().radius)
+                    .bg(cx.theme().secondary)
+                    .text_color(cx.theme().muted_foreground)
+                    .child(status),
+            )
+    };
+    v_flex()
+        .gap_4()
+        .child(heading(
+            "Plugins",
+            "Optional integrations. Each one is a self-contained module.",
+            cx,
+        ))
+        .child(card(
+            "Discord Rich Presence",
+            "Show Letronna on your Discord profile. Configure in Privacy.",
+            "Built in",
+        ))
 }
 
 fn heading(title: &'static str, blurb: &'static str, cx: &App) -> Div {
