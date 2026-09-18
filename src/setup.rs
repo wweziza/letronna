@@ -119,7 +119,13 @@ pub(crate) fn ensure_installed() -> bool {
         return false;
     }
     let _ = std::fs::create_dir_all(&dir);
-    if relocated {
+    if relocated && std::fs::copy(&current, &target).is_err() {
+        // The installed copy is running and holds the file; stop it and try once more.
+        powershell(&format!(
+            "Get-Process letronna -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -eq '{}' }} | Stop-Process -Force",
+            target.display()
+        ));
+        std::thread::sleep(std::time::Duration::from_millis(600));
         let _ = std::fs::copy(&current, &target);
     }
     powershell(&format!(
