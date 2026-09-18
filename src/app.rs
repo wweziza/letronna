@@ -59,6 +59,8 @@ pub(crate) struct Chat {
     pub(crate) gateway_pick: Entity<String>,
     pub(crate) presence_pick: Entity<String>,
     pub(crate) settings_page: Entity<&'static str>,
+    pub(crate) settings_open: bool,
+    pub(crate) settings_closing: bool,
     pub(crate) rename: Entity<InputState>,
     pub(crate) page: Page,
     pub(crate) sidebar_open: bool,
@@ -168,6 +170,8 @@ impl Chat {
             gateway_pick,
             presence_pick,
             settings_page,
+            settings_open: false,
+            settings_closing: false,
             rename,
             busy: false,
             partial: String::new(),
@@ -518,6 +522,7 @@ impl Render for Chat {
                     .when(self.sidebar_open, |this| this.child(self.sidebar(cx)))
                     .child(main),
             )
+            .children(self.settings_overlay(window, cx))
             .children(Root::render_dialog_layer(window, cx))
     }
 }

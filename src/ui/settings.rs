@@ -54,11 +54,98 @@ impl Chat {
         self.save();
         self.error = None;
         self.load_models(window, cx);
-        window.close_dialog(cx);
+        self.close_settings(cx);
+    }
+
+    pub(crate) fn open_settings(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.settings_open = true;
+        self.settings_closing = false;
         cx.notify();
     }
 
-    pub(crate) fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn close_settings(&mut self, cx: &mut Context<Self>) {
+        if self.settings_closing {
+            return;
+        }
+        self.settings_closing = true;
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(170))
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                this.settings_open = false;
+                this.settings_closing = false;
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// The settings overlay, mounted while open so both open and close animate.
+    pub(crate) fn settings_overlay(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        if !self.settings_open {
+            return None;
+        }
+        let closing = self.settings_closing;
+        let anim = || {
+            Animation::new(std::time::Duration::from_millis(180))
+                .with_easing(gpui::ease_out_quint())
+        };
+        let scrim = div()
+            .id("settings-scrim")
+            .absolute()
+            .size_full()
+            .bg(gpui::black())
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| this.close_settings(cx)),
+            )
+            .with_animation(
+                if closing { "scrim-out" } else { "scrim-in" },
+                anim(),
+                move |el, delta| {
+                    el.opacity(if closing {
+                        0.55 * (1. - delta)
+                    } else {
+                        0.55 * delta
+                    })
+                },
+            );
+        let panel = self.settings_panel(window, cx).with_animation(
+            if closing { "panel-out" } else { "panel-in" },
+            anim(),
+            move |el, delta| {
+                let p = if closing { 1. - delta } else { delta };
+                el.opacity(p).top(px(-14. * (1. - p)))
+            },
+        );
+        Some(
+            div()
+                .absolute()
+                .size_full()
+                .flex()
+                .items_start()
+                .justify_center()
+                .child(scrim)
+                .child(
+                    div()
+                        .relative()
+                        .size_full()
+                        .flex()
+                        .items_start()
+                        .justify_center()
+                        .child(panel),
+                )
+                .into_any_element(),
+        )
+    }
+
+    fn settings_panel(&self, window: &mut Window, cx: &mut Context<Self>) -> Div {
         let endpoint = self.endpoint.clone();
         let model = self.model.clone();
         let key = self.key.clone();
@@ -66,115 +153,114 @@ impl Chat {
         let pick = self.gateway_pick.clone();
         let presence = self.presence_pick.clone();
         let page = self.settings_page.clone();
-        window.open_dialog(cx, move |dialog, window, cx| {
-            let size = window.viewport_size();
-            let gap = px(44.);
-            let height = size.height - gap * 2.;
-            let current_page = *page.read(cx);
-            let nav = PAGES.iter().fold(
-                v_flex()
-                    .w(px(210.))
-                    .h_full()
-                    .flex_shrink_0()
-                    .gap_0p5()
-                    .p_3()
-                    .bg(cx.theme().sidebar)
-                    .border_r_1()
-                    .border_color(cx.theme().border),
-                |nav, (name, icon)| {
-                    let page = page.clone();
-                    let active = *name == current_page;
-                    nav.child(
-                        h_flex()
-                            .id(*name)
-                            .h(px(30.))
-                            .px_2()
-                            .gap_2()
-                            .items_center()
-                            .rounded(cx.theme().radius)
-                            .cursor_pointer()
-                            .text_sm()
-                            .font_family(HEADING_FONT)
-                            .font_weight(FontWeight::MEDIUM)
-                            .when(active, |this| this.bg(cx.theme().sidebar_accent))
-                            .hover(|s| s.bg(cx.theme().sidebar_accent.opacity(0.6)))
-                            .child(
-                                Icon::new(*icon)
-                                    .size_4()
-                                    .text_color(cx.theme().muted_foreground),
-                            )
-                            .child(*name)
-                            .on_click(move |_, _, cx| {
-                                page.update(cx, |p, cx| {
-                                    *p = name;
-                                    cx.notify();
-                                })
-                            }),
-                    )
-                },
-            );
-            let body: AnyElement = match current_page {
-                "Model" => model_page(&model, &chat, cx).into_any_element(),
-                "Appearance" => text_page(
-                    "Appearance",
-                    "Dark theme with the Letronna palette. Theme and font options land here later.",
-                    cx,
-                )
-                .into_any_element(),
-                "Privacy" => privacy_page(&chat, &presence, cx).into_any_element(),
-                "About" => about_page(cx).into_any_element(),
-                _ => gateway_page(&pick, &endpoint, &key, &chat, cx).into_any_element(),
-            };
-            dialog
-                .p_0()
-                .close_button(false)
-                .w(size.width - gap * 2.)
-                .margin_top((gap - gpui_component::TITLE_BAR_HEIGHT).max(px(0.)))
-                .child(
+        let vp = window.viewport_size();
+        let gap = px(44.);
+        let height = vp.height - gap * 2.;
+        let current_page = *page.read(cx);
+        let nav = PAGES.iter().fold(
+            v_flex()
+                .w(px(210.))
+                .h_full()
+                .flex_shrink_0()
+                .gap_0p5()
+                .p_3()
+                .bg(cx.theme().sidebar)
+                .border_r_1()
+                .border_color(cx.theme().border),
+            |nav, (name, icon)| {
+                let page = page.clone();
+                let active = *name == current_page;
+                nav.child(
                     h_flex()
-                        .h(height)
-                        .items_start()
-                        .overflow_hidden()
-                        .rounded(cx.theme().radius_lg)
-                        .child(nav)
+                        .id(*name)
+                        .h(px(30.))
+                        .px_2()
+                        .gap_2()
+                        .items_center()
+                        .rounded(cx.theme().radius)
+                        .cursor_pointer()
+                        .text_sm()
+                        .font_family(HEADING_FONT)
+                        .font_weight(FontWeight::MEDIUM)
+                        .when(active, |this| this.bg(cx.theme().sidebar_accent))
+                        .hover(|s| s.bg(cx.theme().sidebar_accent.opacity(0.6)))
                         .child(
-                            div()
-                                .relative()
-                                .flex_1()
-                                .min_w_0()
-                                .h_full()
-                                .child(
-                                    div()
-                                        .id("settings-body")
-                                        .size_full()
-                                        .overflow_y_scroll()
-                                        .px_8()
-                                        .py_6()
-                                        .child(
-                                            div().child(body).with_animation(
-                                                SharedString::from(format!("page-{current_page}")),
-                                                Animation::new(std::time::Duration::from_millis(
-                                                    200,
-                                                ))
-                                                .with_easing(gpui::ease_out_quint()),
-                                                |el, delta| {
-                                                    el.opacity(delta).mt(px(6. * (1. - delta)))
-                                                },
-                                            ),
-                                        ),
-                                )
-                                .child(
-                                    div().absolute().top_3().right_3().child(
-                                        Button::new("close-settings")
-                                            .ghost()
-                                            .xsmall()
-                                            .icon(Icon::new(IconName::Close))
-                                            .on_click(|_, window, cx| window.close_dialog(cx)),
-                                    ),
-                                ),
-                        ),
+                            Icon::new(*icon)
+                                .size_4()
+                                .text_color(cx.theme().muted_foreground),
+                        )
+                        .child(*name)
+                        .on_click(move |_, _, cx| {
+                            page.update(cx, |p, cx| {
+                                *p = name;
+                                cx.notify();
+                            })
+                        }),
                 )
-        });
+            },
+        );
+        let body: AnyElement = match current_page {
+            "Model" => model_page(&model, &chat, cx).into_any_element(),
+            "Appearance" => text_page(
+                "Appearance",
+                "Dark theme with the Letronna palette. Theme and font options land here later.",
+                cx,
+            )
+            .into_any_element(),
+            "Privacy" => privacy_page(&chat, &presence, cx).into_any_element(),
+            "About" => about_page(cx).into_any_element(),
+            _ => gateway_page(&pick, &endpoint, &key, &chat, cx).into_any_element(),
+        };
+        div()
+            .mt((gap - gpui_component::TITLE_BAR_HEIGHT).max(px(0.)))
+            .w(vp.width - gap * 2.)
+            .bg(cx.theme().background)
+            .border_1()
+            .border_color(cx.theme().border)
+            .rounded(cx.theme().radius_lg)
+            .shadow_lg()
+            .child(
+                h_flex()
+                    .h(height)
+                    .items_start()
+                    .overflow_hidden()
+                    .rounded(cx.theme().radius_lg)
+                    .child(nav)
+                    .child(
+                        div()
+                            .relative()
+                            .flex_1()
+                            .min_w_0()
+                            .h_full()
+                            .child(
+                                div()
+                                    .id("settings-body")
+                                    .size_full()
+                                    .overflow_y_scroll()
+                                    .px_8()
+                                    .py_6()
+                                    .child(
+                                        div().child(body).with_animation(
+                                            SharedString::from(format!("page-{current_page}")),
+                                            Animation::new(std::time::Duration::from_millis(200))
+                                                .with_easing(gpui::ease_out_quint()),
+                                            |el, delta| el.opacity(delta).mt(px(6. * (1. - delta))),
+                                        ),
+                                    ),
+                            )
+                            .child(
+                                div().absolute().top_3().right_3().child(
+                                    Button::new("close-settings")
+                                        .ghost()
+                                        .xsmall()
+                                        .icon(Icon::new(IconName::Close))
+                                        .on_click(
+                                            cx.listener(|this, _, _, cx| this.close_settings(cx)),
+                                        ),
+                                ),
+                            ),
+                    ),
+            )
     }
 }
 
