@@ -41,6 +41,7 @@ impl Chat {
             TextView::markdown(("md", index), message.content.clone(), window, cx)
                 .selectable(true)
                 .line_height(leading)
+                .style(gpui_component::text::TextViewStyle::default().heading_gap(gpui::rems(1.)))
                 .code_block_actions(move |block, _, _| {
                     let code = block.code();
                     let mut hasher = std::hash::DefaultHasher::new();

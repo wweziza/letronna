@@ -31,3 +31,7 @@ strip = true
 
 [profile.dev]
 debug = 0
+
+[patch.crates-io]
+# Backport of longbridge/gpui-kit#3129: configurable heading gap in markdown.
+gpui-component = { git = "https://github.com/wweziza/gpui-kit", branch = "v0.5.1-heading-gap" }
