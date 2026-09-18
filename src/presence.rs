@@ -80,19 +80,32 @@ pub(crate) fn init(cx: &mut App, mode: PresenceMode) {
                 }
             }
             let detail = mode == PresenceMode::Detailed;
-            let state_line = match (&state, detail) {
-                (Update::Chatting(model), true) => format!("Chatting · {model}"),
-                (Update::Chatting(_), false) => "Working".to_string(),
-                (_, true) => "Idle".to_string(),
-                (_, false) => "Open".to_string(),
+            let busy = matches!(state, Update::Chatting(_));
+            // Line 1 (details): what it is doing. Line 2 (state): the specifics.
+            let (details, state_line, small_image, small_text) = match (&state, detail) {
+                (Update::Chatting(model), true) => {
+                    ("Chatting", model.clone(), "generating", "Generating")
+                }
+                (Update::Chatting(_), false) => (
+                    "Busy",
+                    "Working on a reply".into(),
+                    "generating",
+                    "Generating",
+                ),
+                (_, true) => ("Idle", "Ready to help".into(), "idle", "Ready"),
+                (_, false) => ("Open", "Native GPUI agent".into(), "idle", "Ready"),
             };
+            let _ = busy;
             let activity = activity::Activity::new()
-                .details("Letronna")
+                .activity_type(activity::ActivityType::Playing)
+                .details(details)
                 .state(&state_line)
                 .assets(
                     activity::Assets::new()
                         .large_image("letronna")
-                        .large_text("Letronna · native GPUI agent"),
+                        .large_text("Letronna · native GPUI agent")
+                        .small_image(small_image)
+                        .small_text(small_text),
                 )
                 .timestamps(activity::Timestamps::new().start(start))
                 .buttons(vec![activity::Button::new("Get Letronna", REPO)]);
