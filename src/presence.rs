@@ -99,7 +99,7 @@ pub(crate) fn init(cx: &mut App, mode: PresenceMode) {
                     "Generating",
                 ),
                 (_, true) => ("In Letronna", idle_state, "idle", "Ready"),
-                (_, false) => ("Open", "Native GPUI agent".into(), "idle", "Ready"),
+                (_, false) => ("Open", "Letronna".into(), "idle", "Ready"),
             };
             let _ = busy;
             let activity = activity::Activity::new()
@@ -109,7 +109,7 @@ pub(crate) fn init(cx: &mut App, mode: PresenceMode) {
                 .assets(
                     activity::Assets::new()
                         .large_image("letronna")
-                        .large_text("Letronna · native GPUI agent")
+                        .large_text("Letronna")
                         .small_image(small_image)
                         .small_text(small_text),
                 )
