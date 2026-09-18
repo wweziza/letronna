@@ -194,11 +194,18 @@ impl Chat {
             )
             .child(
                 div().px_2().pt_3().child(
-                    Input::new(&self.search).xsmall().h(px(28.)).px_2().prefix(
-                        Icon::new(AppIcon::Search)
-                            .size_3()
-                            .text_color(cx.theme().muted_foreground),
-                    ),
+                    Input::new(&self.search)
+                        .xsmall()
+                        .h(px(28.))
+                        .px_2()
+                        .appearance(false)
+                        .rounded(cx.theme().radius)
+                        .bg(cx.theme().sidebar_accent.opacity(0.7))
+                        .prefix(
+                            Icon::new(AppIcon::Search)
+                                .size_3()
+                                .text_color(cx.theme().muted_foreground),
+                        ),
                 ),
             )
             .child(
