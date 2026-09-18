@@ -368,6 +368,12 @@ impl Chat {
 
 impl Render for Chat {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if let Some(error) = self.error.take() {
+            window.push_notification(
+                gpui_component::notification::Notification::error(error).autohide(false),
+                cx,
+            );
+        }
         let active = self.store.active;
         let conversation = &self.store.conversations[active];
 
@@ -416,41 +422,6 @@ impl Render for Chat {
             .min_w_0()
             .h_full()
             .child(body)
-            .when_some(self.error.clone(), |this, error| {
-                this.child(
-                    div()
-                        .w_full()
-                        .when(self.sidebar_open, |d| d.max_w(relative(0.82)))
-                        .mx_auto()
-                        .px_6()
-                        .pb_2()
-                        .child(
-                            div()
-                                .relative()
-                                .w_full()
-                                .pl_3()
-                                .pr_9()
-                                .py_1p5()
-                                .rounded(cx.theme().radius)
-                                .bg(cx.theme().danger.opacity(0.15))
-                                .text_color(cx.theme().danger)
-                                .text_sm()
-                                .child(error)
-                                .child(
-                                    div().absolute().top_1().right_1().child(
-                                        Button::new("dismiss-error")
-                                            .ghost()
-                                            .xsmall()
-                                            .icon(Icon::new(IconName::Close))
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.error = None;
-                                                cx.notify();
-                                            })),
-                                    ),
-                                ),
-                        ),
-                )
-            })
             .when(self.page == Page::Chat, |this| {
                 this.child(
                     div()

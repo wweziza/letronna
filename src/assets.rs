@@ -44,6 +44,9 @@ impl AssetSource for Assets {
             "trash",
             "export",
             "pencil",
+            "circle-x",
+            "circle-check",
+            "triangle-alert",
             "plugs",
             "palette",
             "list-filter"
