@@ -17,6 +17,7 @@ pub(crate) trait Plugin: 'static {
     fn set_enabled(&self, enabled: bool);  // turn on/off: tear down or resume your own work
     fn enabled(&self) -> bool;             // current state
     fn builtin(&self) -> bool { true }     // false for externally loaded plugins
+    fn settings(&self, cx: &App) -> Option<AnyElement> { None } // your own UI, shown under the row
 }
 ```
 
@@ -46,6 +47,25 @@ pub(crate) enum AppEvent {
 To give plugins a new hook, add a variant here and emit it from the app with
 `plugins::emit(cx, AppEvent::…)`. Keep variants coarse and app-level (a session
 opened, a tool ran, the window focused), not UI details.
+
+## Hooks are trait methods
+
+There are no mixins in Rust. A hook is simply a method the app calls on your
+plugin. You get two kinds:
+
+- **Event hooks** — `handle(&AppEvent)` reacts to what the app is doing.
+- **UI hooks** — `settings(&App) -> Option<AnyElement>` lets you render your own
+  controls. The Plugins page shows whatever you return under your plugin's row.
+
+Your plugin owns its state (an `Arc<AtomicBool>`, a struct behind a `Mutex`, a
+file on disk) and moves clones of it into the closures it builds in `settings`.
+An interactive closure runs later with `&mut App`; call `cx.refresh_windows()`
+after changing state so the page redraws. See `hello.rs` for a full example: it
+counts replies from an event hook and exposes a toggle from the UI hook.
+
+To add a new *kind* of hook (say, a button in the composer, or an entry in the
+title-bar menu), add a method to the `Plugin` trait with a default that returns
+nothing, then call it from that spot in the UI. Existing plugins keep compiling.
 
 ## Lifecycle
 

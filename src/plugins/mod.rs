@@ -8,6 +8,7 @@
 //! it to the `vec![...]` in `main`. Nothing else in the app needs to change.
 
 pub(crate) mod discord;
+pub(crate) mod hello;
 
 use crate::prelude::*;
 pub(crate) use discord::PresenceMode;
@@ -49,6 +50,12 @@ pub(crate) trait Plugin: 'static {
     /// True for plugins compiled into the app; false for ones loaded externally.
     fn builtin(&self) -> bool {
         true
+    }
+    /// Optional settings UI, shown under the plugin on the Plugins page. This is
+    /// the hook a plugin uses to add its own controls. Read-only `cx` is enough
+    /// to build elements; interactive closures act later with `&mut App`.
+    fn settings(&self, _cx: &App) -> Option<AnyElement> {
+        None
     }
 }
 
@@ -117,6 +124,16 @@ pub(crate) fn list(cx: &App) -> Vec<PluginInfo> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// Render one plugin's own settings UI, if it has any.
+pub(crate) fn render_settings(cx: &App, id: &str) -> Option<AnyElement> {
+    let registry = cx.try_global::<Registry>()?;
+    registry
+        .0
+        .iter()
+        .find(|p| p.id() == id)
+        .and_then(|p| p.settings(cx))
 }
 
 /// Toggle a plugin and persist the choice.

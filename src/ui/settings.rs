@@ -266,55 +266,62 @@ fn plugins_page(chat: &Entity<Chat>, cx: &App) -> Div {
         let chat = chat.clone();
         let id = info.id;
         let enabled = info.enabled;
-        list = list.child(
-            h_flex()
-                .items_center()
-                .justify_between()
-                .p_3()
-                .rounded(cx.theme().radius)
-                .bg(cx.theme().secondary.opacity(0.3))
-                .child(
-                    v_flex()
-                        .gap_0p5()
-                        .child(
-                            h_flex()
-                                .items_center()
-                                .gap_2()
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .child(info.name),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .px_1p5()
-                                        .rounded(cx.theme().radius)
-                                        .bg(cx.theme().secondary)
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(if info.builtin { "Built in" } else { "External" }),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground)
-                                .child(info.description),
-                        ),
-                )
-                .child(
-                    div().cursor_pointer().child(
-                        gpui_component::switch::Switch::new(SharedString::from(format!(
-                            "plugin-{id}"
-                        )))
+        let row = h_flex()
+            .items_center()
+            .justify_between()
+            .child(
+                v_flex()
+                    .gap_0p5()
+                    .child(
+                        h_flex()
+                            .items_center()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .child(info.name),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .px_1p5()
+                                    .rounded(cx.theme().radius)
+                                    .bg(cx.theme().secondary)
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(if info.builtin { "Built in" } else { "External" }),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(info.description),
+                    ),
+            )
+            .child(
+                div().cursor_pointer().child(
+                    gpui_component::switch::Switch::new(SharedString::from(format!("plugin-{id}")))
                         .checked(enabled)
                         .on_click(move |_, _, cx| {
                             plugins::set_enabled(cx, id, !enabled);
                             chat.update(cx, |_, cx| cx.notify());
                         }),
-                    ),
                 ),
+            );
+        let settings = if enabled {
+            plugins::render_settings(cx, id)
+        } else {
+            None
+        };
+        list = list.child(
+            v_flex()
+                .gap_2()
+                .p_3()
+                .rounded(cx.theme().radius)
+                .bg(cx.theme().secondary.opacity(0.3))
+                .child(row)
+                .children(settings),
         );
     }
     v_flex()

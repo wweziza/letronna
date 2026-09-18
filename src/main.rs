@@ -26,9 +26,12 @@ fn main() {
         theme::apply(cx);
         plugins::init(
             cx,
-            vec![Box::new(plugins::discord::DiscordPresence::new(
-                plugins::PresenceMode::Detailed,
-            ))],
+            vec![
+                Box::new(plugins::discord::DiscordPresence::new(
+                    plugins::PresenceMode::Detailed,
+                )),
+                Box::new(plugins::hello::Hello::new()),
+            ],
         );
         cx.bind_keys([
             KeyBinding::new("ctrl-n", NewSession, None),
