@@ -85,7 +85,10 @@ pub(crate) fn ensure_installed() {
     let target = dir.join(format!("{BRAND}.exe"));
     let key = registry_key();
     let installed_version = read_value(&key, "DisplayVersion");
-    if installed_version.as_deref() == Some(VERSION) && lnk.exists() && target.exists() {
+    let up_to_date = installed_version.as_deref() == Some(VERSION)
+        && lnk.exists()
+        && !newer_than(&current, &target);
+    if up_to_date {
         return;
     }
     let _ = std::fs::create_dir_all(&dir);
@@ -133,6 +136,15 @@ pub(crate) fn uninstall() -> ! {
             .spawn();
     }
     std::process::exit(0)
+}
+
+fn newer_than(a: &Path, b: &Path) -> bool {
+    let modified = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+    match (modified(a), modified(b)) {
+        (Some(a), Some(b)) => a > b,
+        (Some(_), None) => true,
+        _ => false,
+    }
 }
 
 fn same_file(a: &Path, b: &Path) -> bool {
