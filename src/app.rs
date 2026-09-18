@@ -307,7 +307,8 @@ impl Chat {
             .update(cx, |input, cx| input.set_value("", window, cx));
         self.busy = true;
         self.page = Page::Chat;
-        presence::set_chatting(cx, self.store.model.clone());
+        let convo_title = self.store.conversations[self.store.active].title.clone();
+        presence::set_active(cx, self.store.model.clone(), convo_title);
         self.partial.clear();
         self.error = None;
         self.scroll.scroll_to_bottom();

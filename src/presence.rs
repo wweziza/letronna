@@ -11,17 +11,33 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 const APP_ID: &str = "1550477901332484147";
 const SITE: &str = "https://letronna.gadl.us";
 
+/// Shown as the second line when activity is hidden. One is picked at random.
+const PHRASES: &[&str] = &[
+    "Cooking something…",
+    "Tinkering away…",
+    "Deep in thought…",
+    "Making things…",
+    "In the zone…",
+    "Poking at ideas…",
+    "Heads down…",
+    "Somewhere in a chat…",
+    "Doing something…",
+    "Chasing a thought…",
+    "Building quietly…",
+    "Lost in a prompt…",
+];
+
 pub(crate) enum Update {
     Idle,
-    Chatting(String),
+    Active { model: String, title: String },
     Mode(PresenceMode),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PresenceMode {
-    /// Show what Letronna is doing, including the model.
+    /// Show the conversation and model.
     Detailed,
-    /// Show that Letronna is open, but not the activity.
+    /// Show only that Letronna is open, with a vague status.
     Minimal,
     /// No presence at all.
     Off,
@@ -47,6 +63,14 @@ impl PresenceMode {
 struct Bridge(Sender<Update>);
 impl Global for Bridge {}
 
+fn pick_phrase() -> &'static str {
+    let n = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.subsec_nanos() as usize)
+        .unwrap_or(0);
+    PHRASES[n % PHRASES.len()]
+}
+
 pub(crate) fn init(cx: &mut App, mode: PresenceMode) {
     let app_id = std::env::var("LETRONNA_DISCORD_APP_ID").unwrap_or_else(|_| APP_ID.into());
     let (tx, rx) = channel::<Update>();
@@ -59,16 +83,28 @@ pub(crate) fn init(cx: &mut App, mode: PresenceMode) {
         let mut client = DiscordIpcClient::new(&app_id);
         let mut connected = client.connect().is_ok();
         let mut state = Update::Idle;
-        let mut last_model: Option<String> = None;
+        let mut model = String::new();
+        let mut title = String::new();
+        let mut phrase = pick_phrase();
         let mut mode = mode;
         loop {
             match rx.recv_timeout(Duration::from_secs(15)) {
-                Ok(Update::Mode(m)) => mode = m,
-                Ok(Update::Chatting(m)) => {
-                    last_model = Some(m.clone());
-                    state = Update::Chatting(m);
+                Ok(Update::Mode(m)) => {
+                    mode = m;
+                    phrase = pick_phrase();
                 }
-                Ok(next) => state = next,
+                Ok(Update::Active { model: m, title: t }) => {
+                    model = m;
+                    title = t;
+                    state = Update::Active {
+                        model: model.clone(),
+                        title: title.clone(),
+                    };
+                }
+                Ok(Update::Idle) => {
+                    state = Update::Idle;
+                    phrase = pick_phrase();
+                }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
                 Err(_) => break,
             }
@@ -84,27 +120,41 @@ pub(crate) fn init(cx: &mut App, mode: PresenceMode) {
                     continue;
                 }
             }
-            let detail = mode == PresenceMode::Detailed;
-            let busy = matches!(state, Update::Chatting(_));
-            // Line 1 (details): what it is doing. Line 2 (state): the specifics.
-            let idle_state = last_model.clone().unwrap_or_else(|| "Ready to help".into());
-            let (details, state_line, small_image, small_text) = match (&state, detail) {
-                (Update::Chatting(model), true) => {
-                    ("Chatting", model.clone(), "generating", "Generating")
+            let busy = matches!(state, Update::Active { .. });
+            // Detailed: line 1 is the conversation, line 2 is the model.
+            // Minimal: line 1 is "In Letronna", line 2 is a vague status.
+            let (details, state_line, small_image, small_text) = if mode == PresenceMode::Minimal {
+                (
+                    "In Letronna".to_string(),
+                    phrase.to_string(),
+                    if busy { "generating" } else { "idle" },
+                    if busy { "Working" } else { "Open" },
+                )
+            } else {
+                let convo = if title.is_empty() {
+                    "New session".to_string()
+                } else {
+                    title.clone()
+                };
+                let model_line = if model.is_empty() {
+                    "No model selected".to_string()
+                } else {
+                    model.clone()
+                };
+                if busy {
+                    (
+                        convo,
+                        model_line,
+                        "generating".into(),
+                        "Generating".to_string(),
+                    )
+                } else {
+                    (convo, model_line, "idle".into(), "Idle".to_string())
                 }
-                (Update::Chatting(_), false) => (
-                    "Busy",
-                    "Working on a reply".into(),
-                    "generating",
-                    "Generating",
-                ),
-                (_, true) => ("In Letronna", idle_state, "idle", "Ready"),
-                (_, false) => ("Open", "Letronna".into(), "idle", "Ready"),
             };
-            let _ = busy;
-            let activity = activity::Activity::new()
+            let mut activity = activity::Activity::new()
                 .activity_type(activity::ActivityType::Competing)
-                .details(details)
+                .details(&details)
                 .state(&state_line)
                 .assets(
                     activity::Assets::new()
@@ -113,8 +163,10 @@ pub(crate) fn init(cx: &mut App, mode: PresenceMode) {
                         .small_image(small_image)
                         .small_text(small_text),
                 )
-                .timestamps(activity::Timestamps::new().start(start))
                 .buttons(vec![activity::Button::new("Get Letronna", SITE)]);
+            if busy {
+                activity = activity.timestamps(activity::Timestamps::new().start(start));
+            }
             if client.set_activity(activity).is_err() {
                 connected = false;
                 let _ = client.close();
@@ -136,8 +188,8 @@ pub(crate) fn set_idle(cx: &App) {
     send(cx, Update::Idle);
 }
 
-pub(crate) fn set_chatting(cx: &App, model: String) {
-    send(cx, Update::Chatting(model));
+pub(crate) fn set_active(cx: &App, model: String, title: String) {
+    send(cx, Update::Active { model, title });
 }
 
 pub(crate) fn set_mode(cx: &App, mode: PresenceMode) {
