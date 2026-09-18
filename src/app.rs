@@ -400,7 +400,7 @@ impl Render for Chat {
                 .child(
                     v_flex()
                         .w_full()
-                        .when(self.sidebar_open, |d| d.max_w(px(760.)))
+                        .when(self.sidebar_open, |d| d.max_w(relative(0.82)))
                         .mx_auto()
                         .px_6()
                         .py_6()
@@ -420,19 +420,32 @@ impl Render for Chat {
                 this.child(
                     div()
                         .w_full()
-                        .when(self.sidebar_open, |d| d.max_w(px(760.)))
+                        .when(self.sidebar_open, |d| d.max_w(relative(0.82)))
                         .mx_auto()
                         .px_6()
                         .pb_2()
                         .child(
-                            div()
+                            h_flex()
+                                .w_full()
+                                .items_center()
+                                .gap_2()
                                 .px_3()
-                                .py_2()
+                                .py_1p5()
                                 .rounded(cx.theme().radius)
                                 .bg(cx.theme().danger.opacity(0.15))
                                 .text_color(cx.theme().danger)
                                 .text_sm()
-                                .child(error),
+                                .child(div().flex_1().child(error))
+                                .child(
+                                    Button::new("dismiss-error")
+                                        .ghost()
+                                        .xsmall()
+                                        .icon(Icon::new(IconName::Close))
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.error = None;
+                                            cx.notify();
+                                        })),
+                                ),
                         ),
                 )
             })
@@ -440,7 +453,7 @@ impl Render for Chat {
                 this.child(
                     div()
                         .w_full()
-                        .when(self.sidebar_open, |d| d.max_w(px(760.)))
+                        .when(self.sidebar_open, |d| d.max_w(relative(0.82)))
                         .mx_auto()
                         .px_6()
                         .pb_2()
