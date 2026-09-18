@@ -373,15 +373,36 @@ impl Render for Chat {
             window.push_notification(
                 gpui_component::notification::Notification::error(error)
                     .autohide(false)
-                    .action(move |_, _, _| {
+                    .action(move |_, window, cx| {
                         let text = text.clone();
+                        let copied = window.use_keyed_state("copied-error", cx, |_, _| false);
+                        let done = *copied.read(cx);
                         Button::new("copy-error")
                             .ghost()
                             .xsmall()
-                            .icon(Icon::new(IconName::Copy))
+                            .icon(Icon::new(if done {
+                                IconName::Check
+                            } else {
+                                IconName::Copy
+                            }))
                             .tooltip("Copy message")
                             .on_click(move |_, _, cx| {
-                                cx.write_to_clipboard(ClipboardItem::new_string(text.clone()))
+                                cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
+                                copied.update(cx, |c, cx| {
+                                    *c = true;
+                                    cx.notify();
+                                });
+                                let copied = copied.clone();
+                                cx.spawn(async move |cx| {
+                                    cx.background_executor()
+                                        .timer(std::time::Duration::from_secs(2))
+                                        .await;
+                                    let _ = copied.update(cx, |c, cx| {
+                                        *c = false;
+                                        cx.notify();
+                                    });
+                                })
+                                .detach();
                             })
                     }),
                 cx,

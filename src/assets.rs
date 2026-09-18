@@ -24,6 +24,7 @@ impl AssetSource for Assets {
             "chevron-down",
             "check",
             "loader-circle",
+            "loader",
             "bot",
             "mic",
             "chevrons-up-down",

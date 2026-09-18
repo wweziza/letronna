@@ -23,23 +23,22 @@ impl Chat {
                 .selectable(true)
                 .into_any_element()
         } else if message.content.is_empty() {
-            div()
+            h_flex()
+                .gap_2()
+                .items_center()
                 .text_color(cx.theme().muted_foreground)
+                .child(
+                    gpui_component::spinner::Spinner::new()
+                        .xsmall()
+                        .color(cx.theme().primary),
+                )
                 .child("Thinking…")
                 .into_any_element()
         } else {
             TextView::markdown(("md", index), message.content.clone(), window, cx)
                 .selectable(true)
                 .code_block_actions(|block, _, _| {
-                    let code = block.code();
-                    Button::new("copy-code")
-                        .ghost()
-                        .xsmall()
-                        .icon(Icon::new(IconName::Copy))
-                        .tooltip("Copy code")
-                        .on_click(move |_, _, cx| {
-                            cx.write_to_clipboard(ClipboardItem::new_string(code.to_string()))
-                        })
+                    gpui_component::clipboard::Clipboard::new("copy-code").value(block.code())
                 })
                 .into_any_element()
         };
@@ -63,7 +62,22 @@ impl Chat {
                             .child(label),
                     )
                     .when(streaming, |this| {
-                        this.child(div().size(px(6.)).rounded_full().bg(cx.theme().primary))
+                        this.child(
+                            div()
+                                .size(px(6.))
+                                .rounded_full()
+                                .bg(cx.theme().primary)
+                                .with_animation(
+                                    "pulse",
+                                    Animation::new(std::time::Duration::from_millis(1000))
+                                        .repeat()
+                                        .with_easing(ease_in_out),
+                                    |dot, delta| {
+                                        let wave = 1.0 - (delta * 2.0 - 1.0).abs();
+                                        dot.opacity(0.25 + 0.75 * wave)
+                                    },
+                                ),
+                        )
                     }),
             )
             .child(body)
