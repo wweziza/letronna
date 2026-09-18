@@ -40,10 +40,9 @@ impl Chat {
                     .gap_1()
                     .items_center()
                     .child(
-                        img("images/avatar.png")
-                            .size(px(16.))
-                            .rounded(px(3.))
-                            .flex_shrink_0(),
+                        Icon::new(IconName::CircleUser)
+                            .size_4()
+                            .text_color(cx.theme().muted_foreground),
                     )
                     .child(
                         div()
