@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Discord application id. Override with LETRONNA_DISCORD_APP_ID.
 /// The large image asset must be uploaded to that app's Art Assets as `letronna`.
-const APP_ID: &str = "1420000000000000000";
+const APP_ID: &str = "1550477901332484147";
 
 pub(crate) enum Presence {
     Idle,
