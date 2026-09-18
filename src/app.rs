@@ -425,26 +425,28 @@ impl Render for Chat {
                         .px_6()
                         .pb_2()
                         .child(
-                            h_flex()
+                            div()
+                                .relative()
                                 .w_full()
-                                .items_start()
-                                .gap_2()
-                                .px_3()
+                                .pl_3()
+                                .pr_9()
                                 .py_1p5()
                                 .rounded(cx.theme().radius)
                                 .bg(cx.theme().danger.opacity(0.15))
                                 .text_color(cx.theme().danger)
                                 .text_sm()
-                                .child(div().flex_1().min_w_0().whitespace_normal().child(error))
+                                .child(error)
                                 .child(
-                                    Button::new("dismiss-error")
-                                        .ghost()
-                                        .xsmall()
-                                        .icon(Icon::new(IconName::Close))
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.error = None;
-                                            cx.notify();
-                                        })),
+                                    div().absolute().top_1().right_1().child(
+                                        Button::new("dismiss-error")
+                                            .ghost()
+                                            .xsmall()
+                                            .icon(Icon::new(IconName::Close))
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.error = None;
+                                                cx.notify();
+                                            })),
+                                    ),
                                 ),
                         ),
                 )
