@@ -9,7 +9,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 /// Discord application id. Override with LETRONNA_DISCORD_APP_ID.
 /// The large image asset must be uploaded to that app's Art Assets as `letronna`.
 const APP_ID: &str = "1550477901332484147";
-const REPO: &str = "https://github.com/wweziza/letronna";
+const SITE: &str = "https://letronna.gadl.us";
 
 pub(crate) enum Update {
     Idle,
@@ -59,10 +59,15 @@ pub(crate) fn init(cx: &mut App, mode: PresenceMode) {
         let mut client = DiscordIpcClient::new(&app_id);
         let mut connected = client.connect().is_ok();
         let mut state = Update::Idle;
+        let mut last_model: Option<String> = None;
         let mut mode = mode;
         loop {
             match rx.recv_timeout(Duration::from_secs(15)) {
                 Ok(Update::Mode(m)) => mode = m,
+                Ok(Update::Chatting(m)) => {
+                    last_model = Some(m.clone());
+                    state = Update::Chatting(m);
+                }
                 Ok(next) => state = next,
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
                 Err(_) => break,
@@ -82,6 +87,7 @@ pub(crate) fn init(cx: &mut App, mode: PresenceMode) {
             let detail = mode == PresenceMode::Detailed;
             let busy = matches!(state, Update::Chatting(_));
             // Line 1 (details): what it is doing. Line 2 (state): the specifics.
+            let idle_state = last_model.clone().unwrap_or_else(|| "Ready to help".into());
             let (details, state_line, small_image, small_text) = match (&state, detail) {
                 (Update::Chatting(model), true) => {
                     ("Chatting", model.clone(), "generating", "Generating")
@@ -92,12 +98,12 @@ pub(crate) fn init(cx: &mut App, mode: PresenceMode) {
                     "generating",
                     "Generating",
                 ),
-                (_, true) => ("Idle", "Ready to help".into(), "idle", "Ready"),
+                (_, true) => ("In Letronna", idle_state, "idle", "Ready"),
                 (_, false) => ("Open", "Native GPUI agent".into(), "idle", "Ready"),
             };
             let _ = busy;
             let activity = activity::Activity::new()
-                .activity_type(activity::ActivityType::Playing)
+                .activity_type(activity::ActivityType::Competing)
                 .details(details)
                 .state(&state_line)
                 .assets(
@@ -108,7 +114,7 @@ pub(crate) fn init(cx: &mut App, mode: PresenceMode) {
                         .small_text(small_text),
                 )
                 .timestamps(activity::Timestamps::new().start(start))
-                .buttons(vec![activity::Button::new("Get Letronna", REPO)]);
+                .buttons(vec![activity::Button::new("Get Letronna", SITE)]);
             if client.set_activity(activity).is_err() {
                 connected = false;
                 let _ = client.close();

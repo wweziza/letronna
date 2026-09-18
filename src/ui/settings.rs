@@ -1,5 +1,7 @@
 use crate::prelude::*;
 
+type ApplyMode = std::rc::Rc<dyn Fn(presence::PresenceMode, &mut App)>;
+
 const PAGES: &[(&str, AppIcon)] = &[
     ("Gateways", AppIcon::Plugs),
     ("Model", AppIcon::Robot),
@@ -204,92 +206,120 @@ fn label(text: &'static str, cx: &App) -> Div {
 
 fn privacy_page(chat: &Entity<Chat>, presence: &Entity<String>, cx: &App) -> Div {
     let current = presence::PresenceMode::from_str(presence.read(cx));
-    let options = [
-        (
-            presence::PresenceMode::Detailed,
-            "Show activity",
-            "Discord shows Letronna and the model you are chatting with.",
-        ),
-        (
-            presence::PresenceMode::Minimal,
-            "Hide activity",
-            "Discord shows that Letronna is open, but not what you are doing.",
-        ),
-        (
-            presence::PresenceMode::Off,
-            "Hide everything",
-            "No Discord rich presence at all.",
-        ),
-    ];
-    let mut list = v_flex().gap_2();
-    for (mode, title, blurb) in options {
+    let enabled = current != presence::PresenceMode::Off;
+
+    let apply: ApplyMode = {
         let chat = chat.clone();
-        let active = mode == current;
-        list = list.child(
-            h_flex()
-                .id(title)
-                .gap_3()
-                .items_start()
-                .p_3()
-                .rounded(cx.theme().radius)
-                .border_1()
-                .border_color(if active {
-                    cx.theme().primary
-                } else {
-                    cx.theme().border
-                })
-                .bg(cx.theme().secondary.opacity(0.3))
-                .cursor_pointer()
-                .hover(|s| s.border_color(cx.theme().primary.opacity(0.6)))
+        let presence = presence.clone();
+        std::rc::Rc::new(move |mode: presence::PresenceMode, cx: &mut App| {
+            presence.update(cx, |p, cx| {
+                *p = mode.as_str().into();
+                cx.notify();
+            });
+            presence::set_mode(cx, mode);
+            chat.update(cx, |this, cx| {
+                this.store.presence = mode.as_str().into();
+                this.save();
+                cx.notify();
+            });
+        })
+    };
+
+    let switch_apply = apply.clone();
+    let next = if enabled {
+        presence::PresenceMode::Off
+    } else {
+        presence::PresenceMode::Detailed
+    };
+    let toggle = h_flex()
+        .items_center()
+        .justify_between()
+        .p_3()
+        .rounded(cx.theme().radius)
+        .bg(cx.theme().secondary.opacity(0.3))
+        .child(
+            v_flex()
+                .gap_0p5()
                 .child(
                     div()
-                        .mt_0p5()
-                        .size(px(14.))
-                        .rounded_full()
-                        .border_1()
-                        .border_color(if active {
-                            cx.theme().primary
-                        } else {
-                            cx.theme().muted_foreground
-                        })
-                        .when(active, |d| d.bg(cx.theme().primary)),
+                        .text_sm()
+                        .font_weight(FontWeight::MEDIUM)
+                        .child("Rich presence"),
                 )
                 .child(
-                    v_flex()
-                        .gap_0p5()
-                        .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(title))
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground)
-                                .child(blurb),
-                        ),
+                    div()
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground)
+                        .child("Show Letronna on your Discord profile while it is running."),
+                ),
+        )
+        .child(
+            gpui_component::switch::Switch::new("presence-switch")
+                .checked(enabled)
+                .on_click(move |_, _, cx| switch_apply(next, cx)),
+        );
+
+    let level_label = if current == presence::PresenceMode::Minimal {
+        "Hide activity details"
+    } else {
+        "Show what I am doing"
+    };
+    let detailed = apply.clone();
+    let minimal = apply.clone();
+    let level = h_flex()
+        .items_center()
+        .justify_between()
+        .px_3()
+        .py_2p5()
+        .rounded(cx.theme().radius)
+        .bg(cx.theme().secondary.opacity(0.3))
+        .child(
+            div()
+                .text_sm()
+                .text_color(cx.theme().muted_foreground)
+                .child("What to share"),
+        )
+        .child(
+            Button::new("presence-level")
+                .ghost()
+                .small()
+                .child(
+                    h_flex()
+                        .gap_1()
+                        .items_center()
+                        .child(level_label)
+                        .child(Icon::new(IconName::ChevronDown).size_3()),
                 )
-                .on_click({
-                    let presence = presence.clone();
-                    move |_, _, cx| {
-                        presence.update(cx, |p, cx| {
-                            *p = mode.as_str().into();
-                            cx.notify();
-                        });
-                        presence::set_mode(cx, mode);
-                        chat.update(cx, |this, cx| {
-                            this.store.presence = mode.as_str().into();
-                            this.save();
-                            cx.notify();
-                        })
-                    }
+                .dropdown_menu(move |menu, _, _| {
+                    let detailed = detailed.clone();
+                    let minimal = minimal.clone();
+                    menu.min_w(px(220.))
+                        .item(
+                            PopupMenuItem::new("Show what I am doing")
+                                .checked(current == presence::PresenceMode::Detailed)
+                                .on_click(move |_, _, cx| {
+                                    detailed(presence::PresenceMode::Detailed, cx)
+                                }),
+                        )
+                        .item(
+                            PopupMenuItem::new("Hide activity details")
+                                .checked(current == presence::PresenceMode::Minimal)
+                                .on_click(move |_, _, cx| {
+                                    minimal(presence::PresenceMode::Minimal, cx)
+                                }),
+                        )
                 }),
         );
-    }
+
     v_flex()
-        .gap_5()
+        .gap_4()
         .child(heading(
             "Discord Rich Presence",
             "Control what Letronna shares with Discord while it is running.",
             cx,
         ))
-        .child(list)
+        .child(toggle)
+        .when(enabled, |this| this.child(level))
 }
 
 fn about_page(cx: &App) -> Div {
