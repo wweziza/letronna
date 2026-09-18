@@ -418,9 +418,11 @@ impl Render for Chat {
         };
 
         let main = v_flex()
+            .relative()
             .flex_1()
             .min_w_0()
             .h_full()
+            .children(Root::render_notification_layer(window, cx))
             .child(body)
             .when(self.page == Page::Chat, |this| {
                 this.child(
@@ -452,6 +454,5 @@ impl Render for Chat {
                     .child(main),
             )
             .children(Root::render_dialog_layer(window, cx))
-            .children(Root::render_notification_layer(window, cx))
     }
 }
