@@ -62,23 +62,39 @@ enum Update {
     Idle,
     Active { model: String, title: String },
     Mode(PresenceMode),
+    Enabled(bool),
 }
 
 /// The plugin holds the channel to its worker thread.
 pub(crate) struct DiscordPresence {
     tx: Sender<Update>,
     initial: PresenceMode,
+    enabled: std::sync::atomic::AtomicBool,
 }
 
 impl DiscordPresence {
     pub(crate) fn new(initial: PresenceMode) -> Self {
         let (tx, rx) = channel();
         spawn_worker(rx, initial);
-        Self { tx, initial }
+        Self {
+            tx,
+            initial,
+            enabled: std::sync::atomic::AtomicBool::new(true),
+        }
     }
 }
 
 impl Plugin for DiscordPresence {
+    fn id(&self) -> &'static str {
+        "discord-presence"
+    }
+    fn name(&self) -> &'static str {
+        "Discord Rich Presence"
+    }
+    fn description(&self) -> &'static str {
+        "Show Letronna on your Discord profile. Detail level is set in Privacy."
+    }
+
     fn init(&self, _cx: &mut App) {
         let _ = self.tx.send(Update::Mode(self.initial));
     }
@@ -93,6 +109,16 @@ impl Plugin for DiscordPresence {
             AppEvent::PresenceMode(mode) => Update::Mode(*mode),
         };
         let _ = self.tx.send(update);
+    }
+
+    fn set_enabled(&self, enabled: bool) {
+        self.enabled
+            .store(enabled, std::sync::atomic::Ordering::Relaxed);
+        let _ = self.tx.send(Update::Enabled(enabled));
+    }
+
+    fn enabled(&self) -> bool {
+        self.enabled.load(std::sync::atomic::Ordering::Relaxed)
     }
 }
 
@@ -119,8 +145,10 @@ fn spawn_worker(rx: std::sync::mpsc::Receiver<Update>, mode: PresenceMode) {
         let mut title = String::new();
         let mut phrase = pick_phrase();
         let mut mode = mode;
+        let mut enabled = true;
         loop {
             match rx.recv_timeout(Duration::from_secs(15)) {
+                Ok(Update::Enabled(e)) => enabled = e,
                 Ok(Update::Mode(m)) => {
                     mode = m;
                     phrase = pick_phrase();
@@ -137,7 +165,7 @@ fn spawn_worker(rx: std::sync::mpsc::Receiver<Update>, mode: PresenceMode) {
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
                 Err(_) => break,
             }
-            if mode == PresenceMode::Off {
+            if !enabled || mode == PresenceMode::Off {
                 if connected {
                     let _ = client.clear_activity();
                 }

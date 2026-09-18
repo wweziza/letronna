@@ -204,7 +204,7 @@ impl Chat {
             )
             .into_any_element(),
             "Privacy" => privacy_page(&chat, &presence, cx).into_any_element(),
-            "Plugins" => plugins_page(cx).into_any_element(),
+            "Plugins" => plugins_page(&chat, cx).into_any_element(),
             "About" => about_page(cx).into_any_element(),
             _ => gateway_page(&pick, &endpoint, &key, &chat, cx).into_any_element(),
         };
@@ -260,48 +260,53 @@ impl Chat {
     }
 }
 
-fn plugins_page(cx: &App) -> Div {
-    let card = |name: &'static str, blurb: &'static str, status: &'static str| {
-        h_flex()
-            .items_center()
-            .justify_between()
-            .p_3()
-            .rounded(cx.theme().radius)
-            .bg(cx.theme().secondary.opacity(0.3))
-            .child(
-                v_flex()
-                    .gap_0p5()
-                    .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(name))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(blurb),
-                    ),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .px_2()
-                    .py_0p5()
-                    .rounded(cx.theme().radius)
-                    .bg(cx.theme().secondary)
-                    .text_color(cx.theme().muted_foreground)
-                    .child(status),
-            )
-    };
+fn plugins_page(chat: &Entity<Chat>, cx: &App) -> Div {
+    let mut list = v_flex().gap_2();
+    for info in plugins::list(cx) {
+        let chat = chat.clone();
+        let id = info.id;
+        let enabled = info.enabled;
+        list = list.child(
+            h_flex()
+                .items_center()
+                .justify_between()
+                .p_3()
+                .rounded(cx.theme().radius)
+                .bg(cx.theme().secondary.opacity(0.3))
+                .child(
+                    v_flex()
+                        .gap_0p5()
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(FontWeight::MEDIUM)
+                                .child(info.name),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(info.description),
+                        ),
+                )
+                .child(
+                    gpui_component::switch::Switch::new(SharedString::from(format!("plugin-{id}")))
+                        .checked(enabled)
+                        .on_click(move |_, _, cx| {
+                            plugins::set_enabled(cx, id, !enabled);
+                            chat.update(cx, |_, cx| cx.notify());
+                        }),
+                ),
+        );
+    }
     v_flex()
         .gap_4()
         .child(heading(
             "Plugins",
-            "Optional integrations. Each one is a self-contained module.",
+            "Optional integrations. Toggle one off to unload it. Choices are saved in plugins.json.",
             cx,
         ))
-        .child(card(
-            "Discord Rich Presence",
-            "Show Letronna on your Discord profile. Configure in Privacy.",
-            "Built in",
-        ))
+        .child(list)
 }
 
 fn heading(title: &'static str, blurb: &'static str, cx: &App) -> Div {
