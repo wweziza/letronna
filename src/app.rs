@@ -303,6 +303,7 @@ impl Chat {
             .update(cx, |input, cx| input.set_value("", window, cx));
         self.busy = true;
         self.page = Page::Chat;
+        presence::set(cx, presence::Presence::Chatting(self.store.model.clone()));
         self.partial.clear();
         self.error = None;
         self.scroll.scroll_to_bottom();
@@ -318,6 +319,7 @@ impl Chat {
                             Event::FreeRemaining(n) => this.free_remaining = Some(n),
                             Event::Finished(result) => {
                                 this.busy = false;
+                                presence::set(cx, presence::Presence::Idle);
                                 match result {
                                     Ok(()) => {
                                         let model = this.store.model.clone();

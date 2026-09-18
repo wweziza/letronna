@@ -4,6 +4,7 @@ mod assets;
 mod backend;
 mod gateway;
 mod prelude;
+mod presence;
 #[cfg(windows)]
 mod setup;
 mod store;
@@ -27,6 +28,7 @@ fn main() {
     Application::new().with_assets(Assets).run(|cx| {
         gpui_component::init(cx);
         theme::apply(cx);
+        presence::init(cx);
         cx.bind_keys([
             KeyBinding::new("ctrl-n", NewSession, None),
             KeyBinding::new(

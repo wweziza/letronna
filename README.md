@@ -25,6 +25,8 @@ Download or build `letronna.exe` and double-click it. Windows only for now.
 
 On first launch it registers itself: the executable is copied to `%LOCALAPPDATA%\Programs\Letronna`, a Start Menu entry is added so it shows up in Windows search, and an entry appears in Apps & features. Newer builds re-register on launch. Uninstall from Apps & features, or run `Letronna.exe --uninstall`.
 
+If Discord is running, Letronna shows a rich presence (Idle, or Chatting with the model). Set `LETRONNA_DISCORD_APP_ID` to your own Discord application id, and upload a `letronna` art asset to it, for the icon to appear.
+
 Closing the window keeps Letronna in the notification area. Left-click the tray icon to bring it back; right-click for Check for updates and Quit.
 
 First launch uses the AILE Free gateway, which needs no key and gives a few guest replies. Open **Settings** at the bottom of the sidebar to pick another gateway, paste an API key, and reload the model list.
@@ -90,6 +92,7 @@ src/ui/messages.rs  message rows, empty state, placeholder pages
 src/ui/settings.rs  gateway dialog
 src/ui/chrome.rs    title bar and footer
 src/tray.rs         notification-area icon and menu (Windows)
+src/presence.rs     Discord rich presence
 src/setup.rs        first-run registration and --uninstall (Windows)
 assets/             app icon, avatar, SVG icons
 scripts/            icon sync, window capture for UI checks

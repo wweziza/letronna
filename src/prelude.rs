@@ -20,6 +20,7 @@ pub(crate) use crate::{
     assets::*,
     backend::{self, Connection, Event, Message},
     gateway::*,
+    presence,
     store::*,
     theme::*,
 };
