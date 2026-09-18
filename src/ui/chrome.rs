@@ -34,17 +34,23 @@ impl Chat {
         Button::new("account")
             .ghost()
             .xsmall()
+            .compact()
             .child(
                 h_flex()
-                    .gap_1p5()
+                    .gap_1()
                     .items_center()
                     .child(
                         img("images/avatar.png")
-                            .size(px(18.))
-                            .rounded(px(4.))
+                            .size(px(16.))
+                            .rounded(px(3.))
                             .flex_shrink_0(),
                     )
-                    .child(div().text_xs().child(name))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(name),
+                    )
                     .child(
                         Icon::new(IconName::ChevronDown)
                             .size_3()
