@@ -184,6 +184,11 @@ impl Chat {
             _subscriptions: subscriptions,
         };
         this.load_models(window, cx);
+        if this.store.presence == "off" {
+            plugins::set_enabled(cx, plugins::DISCORD, false);
+            this.store.presence = "detailed".into();
+            this.save();
+        }
         plugins::emit(
             cx,
             plugins::AppEvent::PresenceMode(plugins::PresenceMode::from_str(&this.store.presence)),

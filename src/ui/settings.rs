@@ -337,7 +337,11 @@ fn label(text: &'static str, cx: &App) -> Div {
 
 fn privacy_page(chat: &Entity<Chat>, presence: &Entity<String>, cx: &App) -> Div {
     let current = plugins::PresenceMode::from_str(presence.read(cx));
-    let enabled = current != plugins::PresenceMode::Off;
+    let enabled = plugins::list(cx)
+        .iter()
+        .find(|p| p.id == plugins::DISCORD)
+        .map(|p| p.enabled)
+        .unwrap_or(true);
 
     let apply: ApplyMode = {
         let chat = chat.clone();
@@ -356,12 +360,7 @@ fn privacy_page(chat: &Entity<Chat>, presence: &Entity<String>, cx: &App) -> Div
         })
     };
 
-    let switch_apply = apply.clone();
-    let next = if enabled {
-        plugins::PresenceMode::Off
-    } else {
-        plugins::PresenceMode::Detailed
-    };
+    let toggle_chat = chat.clone();
     let toggle = h_flex()
         .items_center()
         .justify_between()
@@ -387,7 +386,10 @@ fn privacy_page(chat: &Entity<Chat>, presence: &Entity<String>, cx: &App) -> Div
         .child(
             gpui_component::switch::Switch::new("presence-switch")
                 .checked(enabled)
-                .on_click(move |_, _, cx| switch_apply(next, cx)),
+                .on_click(move |_, _, cx| {
+                    plugins::set_enabled(cx, plugins::DISCORD, !enabled);
+                    toggle_chat.update(cx, |_, cx| cx.notify());
+                }),
         );
 
     let level_label = if current == plugins::PresenceMode::Minimal {

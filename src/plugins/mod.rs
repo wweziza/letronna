@@ -11,6 +11,9 @@ pub(crate) mod discord;
 
 use crate::prelude::*;
 pub(crate) use discord::PresenceMode;
+
+/// Stable id of the Discord presence plugin.
+pub(crate) const DISCORD: &str = "discord-presence";
 use std::collections::HashMap;
 
 /// Things the app announces that a plugin may care about. Extend this enum to

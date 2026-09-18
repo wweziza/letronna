@@ -36,15 +36,12 @@ pub(crate) enum PresenceMode {
     Detailed,
     /// Show only that Letronna is open, with a vague status.
     Minimal,
-    /// No presence at all.
-    Off,
 }
 
 impl PresenceMode {
     pub(crate) fn from_str(s: &str) -> Self {
         match s {
             "minimal" => Self::Minimal,
-            "off" => Self::Off,
             _ => Self::Detailed,
         }
     }
@@ -52,7 +49,6 @@ impl PresenceMode {
         match self {
             Self::Detailed => "detailed",
             Self::Minimal => "minimal",
-            Self::Off => "off",
         }
     }
 }
@@ -86,7 +82,7 @@ impl DiscordPresence {
 
 impl Plugin for DiscordPresence {
     fn id(&self) -> &'static str {
-        "discord-presence"
+        super::DISCORD
     }
     fn name(&self) -> &'static str {
         "Discord Rich Presence"
@@ -165,7 +161,7 @@ fn spawn_worker(rx: std::sync::mpsc::Receiver<Update>, mode: PresenceMode) {
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
                 Err(_) => break,
             }
-            if !enabled || mode == PresenceMode::Off {
+            if !enabled {
                 if connected {
                     let _ = client.clear_activity();
                 }
