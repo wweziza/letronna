@@ -20,6 +20,9 @@ fn main() {
         if std::env::args().any(|a| a == "--uninstall") {
             setup::uninstall();
         }
+        if !setup::single_instance() {
+            return;
+        }
         setup::ensure_installed();
     }
     Application::new().with_assets(Assets).run(|cx| {

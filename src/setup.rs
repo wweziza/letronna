@@ -76,6 +76,30 @@ fn read_value(key: &[u16], name: &str) -> Option<String> {
     })
 }
 
+/// Returns false if another Letronna is already running, after bringing its window forward.
+pub(crate) fn single_instance() -> bool {
+    use windows_sys::Win32::{
+        Foundation::{ERROR_ALREADY_EXISTS, GetLastError},
+        System::Threading::CreateMutexW,
+        UI::WindowsAndMessaging::{FindWindowW, SW_SHOW, SetForegroundWindow, ShowWindow},
+    };
+    let name = wide(r"Local\LetronnaSingleInstance");
+    unsafe {
+        let handle = CreateMutexW(std::ptr::null(), 0, name.as_ptr());
+        if handle.is_null() || GetLastError() != ERROR_ALREADY_EXISTS {
+            return true;
+        }
+        let class = wide("Zed::Window");
+        let title = wide(BRAND);
+        let hwnd = FindWindowW(class.as_ptr(), title.as_ptr());
+        if !hwnd.is_null() {
+            ShowWindow(hwnd, SW_SHOW);
+            SetForegroundWindow(hwnd);
+        }
+    }
+    false
+}
+
 /// Registers this build if it is not yet installed or is newer than the installed one.
 pub(crate) fn ensure_installed() {
     let (Some(dir), Some(lnk), Ok(current)) = (install_dir(), shortcut(), std::env::current_exe())

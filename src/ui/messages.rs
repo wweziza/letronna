@@ -27,6 +27,17 @@ impl Chat {
         } else {
             TextView::markdown(("md", index), message.content.clone(), window, cx)
                 .selectable(true)
+                .code_block_actions(|block, _, _| {
+                    let code = block.code();
+                    Button::new("copy-code")
+                        .ghost()
+                        .xsmall()
+                        .icon(Icon::new(IconName::Copy))
+                        .tooltip("Copy code")
+                        .on_click(move |_, _, cx| {
+                            cx.write_to_clipboard(ClipboardItem::new_string(code.to_string()))
+                        })
+                })
                 .into_any_element()
         };
         v_flex()
