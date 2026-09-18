@@ -97,6 +97,7 @@ struct TrayMenu {
 
 impl TrayMenu {
     fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        make_topmost(window);
         let opened = std::time::Instant::now();
         let activation = cx.observe_window_activation(window, move |_, window, _| {
             if !window.is_window_active() && opened.elapsed() > Duration::from_millis(200) {
@@ -173,18 +174,35 @@ pub(crate) fn hide(window: &mut Window) {
     set_visible(window, false);
 }
 
-fn set_visible(window: &Window, visible: bool) {
+fn hwnd(window: &Window) -> Option<*mut core::ffi::c_void> {
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let handle = HasWindowHandle::window_handle(window).ok()?;
+    match handle.as_raw() {
+        RawWindowHandle::Win32(h) => Some(h.hwnd.get() as *mut core::ffi::c_void),
+        _ => None,
+    }
+}
+
+fn make_topmost(window: &Window) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE, SetForegroundWindow, SetWindowPos,
+    };
+    let Some(hwnd) = hwnd(window) else {
+        return;
+    };
+    unsafe {
+        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        SetForegroundWindow(hwnd);
+    }
+}
+
+fn set_visible(window: &Window, visible: bool) {
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         SW_HIDE, SW_SHOW, SetForegroundWindow, ShowWindow,
     };
-    let Ok(handle) = HasWindowHandle::window_handle(window) else {
+    let Some(hwnd) = hwnd(window) else {
         return;
     };
-    let RawWindowHandle::Win32(h) = handle.as_raw() else {
-        return;
-    };
-    let hwnd = h.hwnd.get() as *mut core::ffi::c_void;
     unsafe {
         ShowWindow(hwnd, if visible { SW_SHOW } else { SW_HIDE });
         if visible {
