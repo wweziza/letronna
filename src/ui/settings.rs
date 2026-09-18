@@ -277,10 +277,24 @@ fn plugins_page(chat: &Entity<Chat>, cx: &App) -> Div {
                     v_flex()
                         .gap_0p5()
                         .child(
-                            div()
-                                .text_sm()
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(info.name),
+                            h_flex()
+                                .items_center()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(info.name),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .px_1p5()
+                                        .rounded(cx.theme().radius)
+                                        .bg(cx.theme().secondary)
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child(if info.builtin { "Built in" } else { "External" }),
+                                ),
                         )
                         .child(
                             div()

@@ -46,6 +46,10 @@ pub(crate) trait Plugin: 'static {
     fn set_enabled(&self, enabled: bool);
     /// Current on/off state.
     fn enabled(&self) -> bool;
+    /// True for plugins compiled into the app; false for ones loaded externally.
+    fn builtin(&self) -> bool {
+        true
+    }
 }
 
 /// A snapshot of a plugin for the Settings list.
@@ -54,6 +58,7 @@ pub(crate) struct PluginInfo {
     pub(crate) name: &'static str,
     pub(crate) description: &'static str,
     pub(crate) enabled: bool,
+    pub(crate) builtin: bool,
 }
 
 struct Registry(Vec<Box<dyn Plugin>>);
@@ -107,6 +112,7 @@ pub(crate) fn list(cx: &App) -> Vec<PluginInfo> {
                     name: p.name(),
                     description: p.description(),
                     enabled: p.enabled(),
+                    builtin: p.builtin(),
                 })
                 .collect()
         })
