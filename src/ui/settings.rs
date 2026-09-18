@@ -63,20 +63,41 @@ impl Chat {
         let page = self.settings_page.clone();
         window.open_dialog(cx, move |dialog, window, cx| {
             let size = window.viewport_size();
+            let height = size.height * 0.8;
             let current_page = *page.read(cx);
             let nav = PAGES.iter().fold(
-                v_flex().w(px(190.)).flex_shrink_0().gap_0p5().pr_4(),
+                v_flex()
+                    .w(px(210.))
+                    .h_full()
+                    .flex_shrink_0()
+                    .gap_0p5()
+                    .p_3()
+                    .bg(cx.theme().sidebar)
+                    .border_r_1()
+                    .border_color(cx.theme().border),
                 |nav, (name, icon)| {
                     let page = page.clone();
                     let active = *name == current_page;
                     nav.child(
-                        Button::new(*name)
-                            .small()
-                            .w_full()
-                            .justify_start()
-                            .map(|b| if active { b.primary() } else { b.ghost() })
-                            .icon(Icon::new(*icon))
-                            .label(*name)
+                        h_flex()
+                            .id(*name)
+                            .h(px(30.))
+                            .px_2()
+                            .gap_2()
+                            .items_center()
+                            .rounded(cx.theme().radius)
+                            .cursor_pointer()
+                            .text_sm()
+                            .font_family(HEADING_FONT)
+                            .font_weight(FontWeight::MEDIUM)
+                            .when(active, |this| this.bg(cx.theme().sidebar_accent))
+                            .hover(|s| s.bg(cx.theme().sidebar_accent.opacity(0.6)))
+                            .child(
+                                Icon::new(*icon)
+                                    .size_4()
+                                    .text_color(cx.theme().muted_foreground),
+                            )
+                            .child(*name)
                             .on_click(move |_, _, cx| {
                                 page.update(cx, |p, cx| {
                                     *p = name;
@@ -109,24 +130,41 @@ impl Chat {
                 _ => gateway_page(&pick, &endpoint, &key, &chat, cx).into_any_element(),
             };
             dialog
-                .title(div().font_family(HEADING_FONT).child("Settings"))
+                .p_0()
+                .close_button(false)
                 .w(size.width * 0.9)
+                .margin_top((size.height - height) / 2.)
                 .child(
                     h_flex()
+                        .h(height)
                         .items_start()
-                        .h(size.height * 0.72)
+                        .overflow_hidden()
+                        .rounded(cx.theme().radius_lg)
                         .child(nav)
                         .child(
                             div()
-                                .id("settings-body")
+                                .relative()
                                 .flex_1()
                                 .min_w_0()
                                 .h_full()
-                                .overflow_y_scroll()
-                                .pl_6()
-                                .border_l_1()
-                                .border_color(cx.theme().border)
-                                .child(body),
+                                .child(
+                                    div()
+                                        .id("settings-body")
+                                        .size_full()
+                                        .overflow_y_scroll()
+                                        .px_8()
+                                        .py_6()
+                                        .child(body),
+                                )
+                                .child(
+                                    div().absolute().top_3().right_3().child(
+                                        Button::new("close-settings")
+                                            .ghost()
+                                            .xsmall()
+                                            .icon(Icon::new(IconName::Close))
+                                            .on_click(|_, window, cx| window.close_dialog(cx)),
+                                    ),
+                                ),
                         ),
                 )
         });
@@ -200,56 +238,61 @@ fn gateway_page(
 ) -> Div {
     let current = pick.read(cx).clone();
     let g = gateway(&current);
-    let mut cards = h_flex().flex_wrap().gap_3();
-    for gw in GATEWAYS {
-        let chat = chat.clone();
-        let active = gw.name == current;
-        cards = cards.child(
-            v_flex()
-                .id(gw.name)
-                .w(px(190.))
-                .h(px(112.))
-                .p_3()
-                .gap_1p5()
-                .rounded(cx.theme().radius)
-                .border_1()
-                .border_color(if active {
-                    cx.theme().primary
-                } else {
-                    cx.theme().border
-                })
-                .bg(cx.theme().secondary.opacity(0.3))
-                .cursor_pointer()
-                .hover(|s| s.border_color(cx.theme().primary.opacity(0.6)))
-                .child(
-                    h_flex()
-                        .items_center()
-                        .justify_between()
-                        .child(
-                            div()
-                                .text_sm()
-                                .font_family(HEADING_FONT)
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(gw.name),
-                        )
-                        .when(active, |this| {
-                            this.child(
-                                Icon::new(IconName::Check)
-                                    .size_4()
-                                    .text_color(cx.theme().primary),
+    let mut cards = v_flex().gap_3();
+    for row in GATEWAYS.chunks(3) {
+        let mut line = h_flex().gap_3();
+        for gw in row {
+            let chat = chat.clone();
+            let active = gw.name == current;
+            line = line.child(
+                v_flex()
+                    .id(gw.name)
+                    .flex_1()
+                    .w_0()
+                    .h(px(120.))
+                    .p_3()
+                    .gap_1p5()
+                    .rounded(cx.theme().radius)
+                    .border_1()
+                    .border_color(if active {
+                        cx.theme().primary
+                    } else {
+                        cx.theme().border
+                    })
+                    .bg(cx.theme().secondary.opacity(0.3))
+                    .cursor_pointer()
+                    .hover(|s| s.border_color(cx.theme().primary.opacity(0.6)))
+                    .child(
+                        h_flex()
+                            .items_center()
+                            .justify_between()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_family(HEADING_FONT)
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .child(gw.name),
                             )
-                        }),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground)
-                        .child(gw.blurb),
-                )
-                .on_click(move |_, window, cx| {
-                    chat.update(cx, |this, cx| this.select_gateway(gw.name, window, cx))
-                }),
-        );
+                            .when(active, |this| {
+                                this.child(
+                                    Icon::new(IconName::Check)
+                                        .size_4()
+                                        .text_color(cx.theme().primary),
+                                )
+                            }),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(gw.blurb),
+                    )
+                    .on_click(move |_, window, cx| {
+                        chat.update(cx, |this, cx| this.select_gateway(gw.name, window, cx))
+                    }),
+            );
+        }
+        cards = cards.child(line);
     }
     let save = chat.clone();
     v_flex()
