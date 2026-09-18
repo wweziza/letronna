@@ -11,8 +11,9 @@ public static class NativeAgentWindow {
  [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
 }
 "@
-$expectedPath = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\target\release\letronna.exe'))
-$app = Get-Process -Name letronna | Where-Object { $_.Path -eq $expectedPath } | Select-Object -First 1
+$buildPath = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..	argetelease\letronna.exe'))
+$installedPath = Join-Path $env:LOCALAPPDATA 'Programs\Letronna\Letronna.exe'
+$app = Get-Process -Name letronna | Where-Object { $_.Path -eq $buildPath -or $_.Path -eq $installedPath } | Select-Object -First 1
 if (-not $app) { throw 'Native Agent is not running from this project.' }
 $handle = $app.MainWindowHandle
 if ($Action -eq 'click') {
