@@ -51,6 +51,7 @@ impl AssetSource for Assets {
             "triangle-alert",
             "shield",
             "puzzle",
+            "circle-user",
             "plugs",
             "palette",
             "list-filter"

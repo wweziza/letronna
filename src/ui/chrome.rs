@@ -3,21 +3,76 @@ use crate::prelude::*;
 impl Chat {
     pub(crate) fn title_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         TitleBar::new().child(
-            h_flex().flex_1().items_center().gap_2().child(
-                Button::new("toggle-sidebar")
-                    .ghost()
-                    .xsmall()
-                    .icon(Icon::new(if self.sidebar_open {
-                        IconName::PanelLeftClose
-                    } else {
-                        IconName::PanelLeftOpen
-                    }))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.sidebar_open = !this.sidebar_open;
-                        cx.notify();
-                    })),
-            ),
+            h_flex()
+                .flex_1()
+                .items_center()
+                .gap_2()
+                .child(
+                    Button::new("toggle-sidebar")
+                        .ghost()
+                        .xsmall()
+                        .icon(Icon::new(if self.sidebar_open {
+                            IconName::PanelLeftClose
+                        } else {
+                            IconName::PanelLeftOpen
+                        }))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.sidebar_open = !this.sidebar_open;
+                            cx.notify();
+                        })),
+                )
+                .child(div().flex_1())
+                .child(self.account_chip(cx)),
         )
+    }
+
+    fn account_chip(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        // No native sign-in yet: everyone is a guest. The menu is the shell that
+        // becomes Profile / Settings / Log out once accounts land.
+        let name = "Guest";
+        let chat = cx.entity();
+        Button::new("account")
+            .ghost()
+            .xsmall()
+            .child(
+                h_flex()
+                    .gap_1p5()
+                    .items_center()
+                    .child(
+                        img("images/avatar.png")
+                            .size(px(18.))
+                            .rounded(px(4.))
+                            .flex_shrink_0(),
+                    )
+                    .child(div().text_xs().child(name))
+                    .child(
+                        Icon::new(IconName::ChevronDown)
+                            .size_3()
+                            .text_color(cx.theme().muted_foreground),
+                    ),
+            )
+            .dropdown_menu_with_anchor(gpui::Corner::TopRight, move |menu, _, _| {
+                let settings = chat.clone();
+                menu.min_w(px(180.))
+                    .item(
+                        PopupMenuItem::new("Profile")
+                            .icon(Icon::new(IconName::CircleUser))
+                            .disabled(true),
+                    )
+                    .item(
+                        PopupMenuItem::new("Settings")
+                            .icon(Icon::new(IconName::Settings))
+                            .on_click(move |_, window, cx| {
+                                settings.update(cx, |this, cx| this.open_settings(window, cx))
+                            }),
+                    )
+                    .separator()
+                    .item(
+                        PopupMenuItem::new("Sign in")
+                            .icon(Icon::new(IconName::CircleUser))
+                            .on_click(|_, _, cx| cx.open_url("https://chat.aile.sh")),
+                    )
+            })
     }
 
     fn gateway_chip(&self, cx: &mut Context<Self>) -> impl IntoElement {

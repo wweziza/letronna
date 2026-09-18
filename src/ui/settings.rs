@@ -304,12 +304,16 @@ fn plugins_page(chat: &Entity<Chat>, cx: &App) -> Div {
                         ),
                 )
                 .child(
-                    gpui_component::switch::Switch::new(SharedString::from(format!("plugin-{id}")))
+                    div().cursor_pointer().child(
+                        gpui_component::switch::Switch::new(SharedString::from(format!(
+                            "plugin-{id}"
+                        )))
                         .checked(enabled)
                         .on_click(move |_, _, cx| {
                             plugins::set_enabled(cx, id, !enabled);
                             chat.update(cx, |_, cx| cx.notify());
                         }),
+                    ),
                 ),
         );
     }
@@ -374,38 +378,6 @@ fn privacy_page(chat: &Entity<Chat>, presence: &Entity<String>, cx: &App) -> Div
         })
     };
 
-    let toggle_chat = chat.clone();
-    let toggle = h_flex()
-        .items_center()
-        .justify_between()
-        .p_3()
-        .rounded(cx.theme().radius)
-        .bg(cx.theme().secondary.opacity(0.3))
-        .child(
-            v_flex()
-                .gap_0p5()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Rich presence"),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground)
-                        .child("Show Letronna on your Discord profile while it is running."),
-                ),
-        )
-        .child(
-            gpui_component::switch::Switch::new("presence-switch")
-                .checked(enabled)
-                .on_click(move |_, _, cx| {
-                    plugins::set_enabled(cx, plugins::DISCORD, !enabled);
-                    toggle_chat.update(cx, |_, cx| cx.notify());
-                }),
-        );
-
     let level_label = if current == plugins::PresenceMode::Minimal {
         "Hide activity details"
     } else {
@@ -462,11 +434,21 @@ fn privacy_page(chat: &Entity<Chat>, presence: &Entity<String>, cx: &App) -> Div
         .gap_4()
         .child(heading(
             "Discord Rich Presence",
-            "Control what Letronna shares with Discord while it is running.",
+            "What Letronna shares with Discord. The integration is turned on or off in the Plugins tab.",
             cx,
         ))
-        .child(toggle)
-        .when(enabled, |this| this.child(level))
+        .child(if enabled {
+            level.into_any_element()
+        } else {
+            div()
+                .p_3()
+                .rounded(cx.theme().radius)
+                .bg(cx.theme().secondary.opacity(0.3))
+                .text_sm()
+                .text_color(cx.theme().muted_foreground)
+                .child("Discord Rich Presence is off. Enable it in the Plugins tab to choose what to share.")
+                .into_any_element()
+        })
 }
 
 fn about_page(cx: &App) -> Div {
