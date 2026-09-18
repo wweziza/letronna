@@ -99,7 +99,7 @@ impl Chat {
         }
         let keys = load_keys();
         let saved_key = keys
-            .get(&store.gateway)
+            .get(key_slot(&store.gateway))
             .cloned()
             .or_else(|| std::env::var("AGENT_API_KEY").ok())
             .unwrap_or_default();

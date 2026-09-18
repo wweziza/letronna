@@ -46,6 +46,15 @@ pub(crate) const GATEWAYS: &[Gateway] = &[
     },
 ];
 
+/// Both AILE gateways share one saved key.
+pub(crate) fn key_slot(name: &str) -> &str {
+    if gateway(name).base == AILE {
+        "AILE"
+    } else {
+        name
+    }
+}
+
 pub(crate) fn gateway(name: &str) -> &'static Gateway {
     GATEWAYS
         .iter()

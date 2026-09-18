@@ -24,7 +24,7 @@ impl Chat {
             self.endpoint
                 .update(cx, |input, cx| input.set_value(g.base, window, cx));
         }
-        let key = self.keys.get(name).cloned().unwrap_or_default();
+        let key = self.keys.get(key_slot(name)).cloned().unwrap_or_default();
         self.key
             .update(cx, |input, cx| input.set_value(key, window, cx));
         cx.notify();
@@ -34,10 +34,11 @@ impl Chat {
         self.store.endpoint = self.endpoint.read(cx).value().to_string();
         self.store.model = self.model.read(cx).value().to_string();
         let key = self.key.read(cx).value().to_string();
+        let slot = key_slot(&self.store.gateway).to_string();
         if key.is_empty() {
-            self.keys.remove(&self.store.gateway);
+            self.keys.remove(&slot);
         } else {
-            self.keys.insert(self.store.gateway.clone(), key);
+            self.keys.insert(slot, key);
         }
         if std::fs::create_dir_all(backend::data_dir())
             .and_then(|_| {
