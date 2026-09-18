@@ -419,15 +419,21 @@ impl Render for Chat {
             .when_some(self.error.clone(), |this, error| {
                 this.child(
                     div()
-                        .mx_6()
-                        .mb_2()
-                        .px_3()
-                        .py_2()
-                        .rounded(cx.theme().radius)
-                        .bg(cx.theme().danger.opacity(0.15))
-                        .text_color(cx.theme().danger)
-                        .text_sm()
-                        .child(error),
+                        .w_full()
+                        .when(self.sidebar_open, |d| d.max_w(px(760.)))
+                        .mx_auto()
+                        .px_6()
+                        .pb_2()
+                        .child(
+                            div()
+                                .px_3()
+                                .py_2()
+                                .rounded(cx.theme().radius)
+                                .bg(cx.theme().danger.opacity(0.15))
+                                .text_color(cx.theme().danger)
+                                .text_sm()
+                                .child(error),
+                        ),
                 )
             })
             .when(self.page == Page::Chat, |this| {
