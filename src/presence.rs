@@ -127,8 +127,8 @@ pub(crate) fn init(cx: &mut App, mode: PresenceMode) {
                 (
                     "In Letronna".to_string(),
                     phrase.to_string(),
-                    if busy { "generating" } else { "idle" },
-                    if busy { "Working" } else { "Open" },
+                    if busy { "generating" } else { "idle" }.to_string(),
+                    if busy { "Working" } else { "Open" }.to_string(),
                 )
             } else {
                 let convo = if title.is_empty() {
