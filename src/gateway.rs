@@ -12,13 +12,13 @@ pub(crate) const GATEWAYS: &[Gateway] = &[
         name: "AILE Free",
         base: AILE,
         needs_key: false,
-        blurb: "Guest access to the AILE catalog. No key, a few replies per session.",
+        blurb: "Guest access to the free catalog. No key, a few replies per session.",
     },
     Gateway {
         name: "AILE",
         base: AILE,
         needs_key: true,
-        blurb: "Your AILE account with an API key. Full catalog and quota.",
+        blurb: "Your AILE account with an API key. Marketplace catalog and quota.",
     },
     Gateway {
         name: "OpenAI",

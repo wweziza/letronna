@@ -35,6 +35,8 @@ First launch uses the AILE Free gateway, which needs no key and gives a few gues
 |-------------|-----------------------------------|----------|
 | AILE Free   | `https://api.aile.sh/v1`          | none     |
 | AILE        | `https://api.aile.sh/v1`          | required |
+
+AILE Free talks to the guest chat API and lists the free catalog (`aile-free/…` ids). AILE talks to the marketplace API with your key and lists its own catalog. The two catalogs are separate, so a model shown on one gateway is not necessarily served on the other.
 | OpenAI      | `https://api.openai.com/v1`       | required |
 | OpenRouter  | `https://openrouter.ai/api/v1`    | required |
 | Ollama      | `http://localhost:11434/v1`       | none     |
@@ -58,7 +60,8 @@ Requirements: Rust, Visual Studio C++ build tools, and a Windows SDK with `fxc.e
 
 ```powershell
 cargo build --release
-targetelease\letronna.exe   # registers itself on first run
+target
+elease\letronna.exe   # registers itself on first run
 ```
 
 Checks:

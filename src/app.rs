@@ -180,25 +180,11 @@ impl Chat {
         self.loading_models = true;
         let base = self.endpoint.read(cx).value().to_string();
         let key = self.key.read(cx).value().to_string();
-        let aile = base.trim().trim_end_matches('/') == AILE;
+        let guest = self.store.gateway == GATEWAYS[0].name;
         let (tx, rx) = async_channel::bounded(1);
         std::thread::spawn(move || {
-            let result = if aile && key.trim().is_empty() {
+            let result = if guest {
                 backend::free_models()
-            } else if aile {
-                let mut models = backend::free_models().unwrap_or_default();
-                match backend::list_models(&base, &key) {
-                    Ok(paid) => {
-                        for m in paid {
-                            if !models.contains(&m) {
-                                models.push(m);
-                            }
-                        }
-                        Ok(models)
-                    }
-                    Err(e) if models.is_empty() => Err(e),
-                    Err(_) => Ok(models),
-                }
             } else {
                 backend::list_models(&base, &key)
             };
@@ -292,6 +278,7 @@ impl Chat {
             endpoint: self.endpoint.read(cx).value().to_string(),
             model: self.model.read(cx).value().to_string(),
             key: self.key.read(cx).value().to_string(),
+            guest: self.store.gateway == GATEWAYS[0].name,
         };
         if let Err(error) = backend::validate(&connection) {
             self.error = Some(error);
