@@ -63,7 +63,8 @@ impl Chat {
         let page = self.settings_page.clone();
         window.open_dialog(cx, move |dialog, window, cx| {
             let size = window.viewport_size();
-            let height = size.height * 0.8;
+            let gap = px(44.);
+            let height = size.height - gap * 2.;
             let current_page = *page.read(cx);
             let nav = PAGES.iter().fold(
                 v_flex()
@@ -132,8 +133,8 @@ impl Chat {
             dialog
                 .p_0()
                 .close_button(false)
-                .w(size.width * 0.9)
-                .margin_top((size.height - height) / 2.)
+                .w(size.width - gap * 2.)
+                .margin_top((gap - gpui_component::TITLE_BAR_HEIGHT).max(px(0.)))
                 .child(
                     h_flex()
                         .h(height)
