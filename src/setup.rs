@@ -101,10 +101,12 @@ pub(crate) fn single_instance() -> bool {
 }
 
 /// Registers this build if it is not yet installed or is newer than the installed one.
-pub(crate) fn ensure_installed() {
+/// Returns true when the installed copy was launched instead and this process should exit,
+/// so the taskbar always sees one executable path.
+pub(crate) fn ensure_installed() -> bool {
     let (Some(dir), Some(lnk), Ok(current)) = (install_dir(), shortcut(), std::env::current_exe())
     else {
-        return;
+        return false;
     };
     let target = dir.join(format!("{BRAND}.exe"));
     let key = registry_key();
@@ -112,11 +114,12 @@ pub(crate) fn ensure_installed() {
     let up_to_date = installed_version.as_deref() == Some(VERSION)
         && lnk.exists()
         && !newer_than(&current, &target);
-    if up_to_date {
-        return;
+    let relocated = !same_file(&current, &target);
+    if up_to_date && !relocated {
+        return false;
     }
     let _ = std::fs::create_dir_all(&dir);
-    if !same_file(&current, &target) {
+    if relocated {
         let _ = std::fs::copy(&current, &target);
     }
     powershell(&format!(
@@ -136,6 +139,7 @@ pub(crate) fn ensure_installed() {
     set_value(&key, "URLInfoAbout", "https://github.com/wweziza/letronna");
     set_value(&key, "NoModify", "1");
     set_value(&key, "NoRepair", "1");
+    relocated && Command::new(&target).spawn().is_ok()
 }
 
 /// Removes the shortcut, the registry entry, and the install folder, then exits.
