@@ -28,7 +28,7 @@ fn main() {
     Application::new().with_assets(Assets).run(|cx| {
         gpui_component::init(cx);
         theme::apply(cx);
-        presence::init(cx);
+        presence::init(cx, presence::PresenceMode::Detailed);
         cx.bind_keys([
             KeyBinding::new("ctrl-n", NewSession, None),
             KeyBinding::new(

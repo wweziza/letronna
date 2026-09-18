@@ -17,10 +17,12 @@ impl Chat {
         } else {
             message.model.clone()
         };
+        let leading = px(23.);
         let body: AnyElement = if is_user {
             TextView::markdown(("md", index), message.content.clone(), window, cx)
                 .text(message.content.clone())
                 .selectable(true)
+                .line_height(leading)
                 .into_any_element()
         } else if message.content.is_empty() {
             h_flex()
@@ -37,6 +39,7 @@ impl Chat {
         } else {
             TextView::markdown(("md", index), message.content.clone(), window, cx)
                 .selectable(true)
+                .line_height(leading)
                 .code_block_actions(|block, _, _| {
                     gpui_component::clipboard::Clipboard::new("copy-code").value(block.code())
                 })
@@ -81,6 +84,12 @@ impl Chat {
                     }),
             )
             .child(body)
+            .with_animation(
+                ("appear", index),
+                Animation::new(std::time::Duration::from_millis(260))
+                    .with_easing(gpui::ease_out_quint()),
+                |el, delta| el.opacity(delta).mt(px(10. * (1. - delta))),
+            )
     }
 
     pub(crate) fn empty_state(&self, cx: &mut Context<Self>) -> impl IntoElement {

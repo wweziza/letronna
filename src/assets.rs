@@ -48,6 +48,7 @@ impl AssetSource for Assets {
             "circle-x",
             "circle-check",
             "triangle-alert",
+            "shield",
             "plugs",
             "palette",
             "list-filter"
@@ -75,6 +76,7 @@ pub(crate) enum AppIcon {
     Trash,
     Export,
     Pencil,
+    Shield,
     Robot,
     Plugs,
     Palette,
@@ -97,6 +99,7 @@ impl IconNamed for AppIcon {
             AppIcon::Trash => "icons/trash.svg",
             AppIcon::Export => "icons/export.svg",
             AppIcon::Pencil => "icons/pencil.svg",
+            AppIcon::Shield => "icons/shield.svg",
             AppIcon::Robot => "icons/bot.svg",
             AppIcon::Plugs => "icons/plugs.svg",
             AppIcon::Palette => "icons/palette.svg",

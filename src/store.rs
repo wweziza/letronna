@@ -17,6 +17,8 @@ pub(crate) struct Store {
     pub(crate) model: String,
     #[serde(default)]
     pub(crate) gateway: String,
+    #[serde(default)]
+    pub(crate) presence: String,
 }
 
 pub(crate) fn data_path() -> PathBuf {

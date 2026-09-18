@@ -58,6 +58,7 @@ pub(crate) struct Chat {
     pub(crate) model_search: Entity<InputState>,
     pub(crate) keys: std::collections::HashMap<String, String>,
     pub(crate) gateway_pick: Entity<String>,
+    pub(crate) presence_pick: Entity<String>,
     pub(crate) settings_page: Entity<&'static str>,
     pub(crate) rename: Entity<InputState>,
     pub(crate) page: Page,
@@ -130,6 +131,7 @@ impl Chat {
         });
         let model_search = cx.new(|cx| InputState::new(window, cx).placeholder("Search models…"));
         let gateway_pick = cx.new(|_| store.gateway.clone());
+        let presence_pick = cx.new(|_| store.presence.clone());
         let settings_page = cx.new(|_| "Gateways");
         let rename = cx.new(|cx| InputState::new(window, cx).placeholder("Session name"));
         let subscriptions = vec![
@@ -161,6 +163,7 @@ impl Chat {
             model_search,
             keys,
             gateway_pick,
+            presence_pick,
             settings_page,
             rename,
             busy: false,
@@ -170,6 +173,7 @@ impl Chat {
             _subscriptions: subscriptions,
         };
         this.load_models(window, cx);
+        presence::set_mode(cx, presence::PresenceMode::from_str(&this.store.presence));
         this
     }
 
@@ -303,7 +307,7 @@ impl Chat {
             .update(cx, |input, cx| input.set_value("", window, cx));
         self.busy = true;
         self.page = Page::Chat;
-        presence::set(cx, presence::Presence::Chatting(self.store.model.clone()));
+        presence::set_chatting(cx, self.store.model.clone());
         self.partial.clear();
         self.error = None;
         self.scroll.scroll_to_bottom();
@@ -319,7 +323,7 @@ impl Chat {
                             Event::FreeRemaining(n) => this.free_remaining = Some(n),
                             Event::Finished(result) => {
                                 this.busy = false;
-                                presence::set(cx, presence::Presence::Idle);
+                                presence::set_idle(cx);
                                 match result {
                                     Ok(()) => {
                                         let model = this.store.model.clone();

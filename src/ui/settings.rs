@@ -4,6 +4,7 @@ const PAGES: &[(&str, AppIcon)] = &[
     ("Gateways", AppIcon::Plugs),
     ("Model", AppIcon::Robot),
     ("Appearance", AppIcon::Palette),
+    ("Privacy", AppIcon::Shield),
     ("About", AppIcon::Info),
 ];
 
@@ -61,6 +62,7 @@ impl Chat {
         let key = self.key.clone();
         let chat = cx.entity();
         let pick = self.gateway_pick.clone();
+        let presence = self.presence_pick.clone();
         let page = self.settings_page.clone();
         window.open_dialog(cx, move |dialog, window, cx| {
             let size = window.viewport_size();
@@ -117,6 +119,7 @@ impl Chat {
                     cx,
                 )
                 .into_any_element(),
+                "Privacy" => privacy_page(&chat, &presence, cx).into_any_element(),
                 "About" => about_page(cx).into_any_element(),
                 _ => gateway_page(&pick, &endpoint, &key, &chat, cx).into_any_element(),
             };
@@ -145,7 +148,18 @@ impl Chat {
                                         .overflow_y_scroll()
                                         .px_8()
                                         .py_6()
-                                        .child(body),
+                                        .child(
+                                            div().child(body).with_animation(
+                                                SharedString::from(format!("page-{current_page}")),
+                                                Animation::new(std::time::Duration::from_millis(
+                                                    200,
+                                                ))
+                                                .with_easing(gpui::ease_out_quint()),
+                                                |el, delta| {
+                                                    el.opacity(delta).mt(px(6. * (1. - delta)))
+                                                },
+                                            ),
+                                        ),
                                 )
                                 .child(
                                     div().absolute().top_3().right_3().child(
@@ -186,6 +200,96 @@ fn label(text: &'static str, cx: &App) -> Div {
         .font_family(HEADING_FONT)
         .text_color(cx.theme().muted_foreground)
         .child(text)
+}
+
+fn privacy_page(chat: &Entity<Chat>, presence: &Entity<String>, cx: &App) -> Div {
+    let current = presence::PresenceMode::from_str(presence.read(cx));
+    let options = [
+        (
+            presence::PresenceMode::Detailed,
+            "Show activity",
+            "Discord shows Letronna and the model you are chatting with.",
+        ),
+        (
+            presence::PresenceMode::Minimal,
+            "Hide activity",
+            "Discord shows that Letronna is open, but not what you are doing.",
+        ),
+        (
+            presence::PresenceMode::Off,
+            "Hide everything",
+            "No Discord rich presence at all.",
+        ),
+    ];
+    let mut list = v_flex().gap_2();
+    for (mode, title, blurb) in options {
+        let chat = chat.clone();
+        let active = mode == current;
+        list = list.child(
+            h_flex()
+                .id(title)
+                .gap_3()
+                .items_start()
+                .p_3()
+                .rounded(cx.theme().radius)
+                .border_1()
+                .border_color(if active {
+                    cx.theme().primary
+                } else {
+                    cx.theme().border
+                })
+                .bg(cx.theme().secondary.opacity(0.3))
+                .cursor_pointer()
+                .hover(|s| s.border_color(cx.theme().primary.opacity(0.6)))
+                .child(
+                    div()
+                        .mt_0p5()
+                        .size(px(14.))
+                        .rounded_full()
+                        .border_1()
+                        .border_color(if active {
+                            cx.theme().primary
+                        } else {
+                            cx.theme().muted_foreground
+                        })
+                        .when(active, |d| d.bg(cx.theme().primary)),
+                )
+                .child(
+                    v_flex()
+                        .gap_0p5()
+                        .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(title))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(blurb),
+                        ),
+                )
+                .on_click({
+                    let presence = presence.clone();
+                    move |_, _, cx| {
+                        presence.update(cx, |p, cx| {
+                            *p = mode.as_str().into();
+                            cx.notify();
+                        });
+                        presence::set_mode(cx, mode);
+                        chat.update(cx, |this, cx| {
+                            this.store.presence = mode.as_str().into();
+                            this.save();
+                            cx.notify();
+                        })
+                    }
+                }),
+        );
+    }
+    v_flex()
+        .gap_5()
+        .child(heading(
+            "Discord Rich Presence",
+            "Control what Letronna shares with Discord while it is running.",
+            cx,
+        ))
+        .child(list)
 }
 
 fn about_page(cx: &App) -> Div {
