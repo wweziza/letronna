@@ -199,8 +199,6 @@ impl Chat {
                         .h(px(28.))
                         .px_2()
                         .appearance(false)
-                        .rounded(cx.theme().radius)
-                        .bg(cx.theme().sidebar_accent.opacity(0.7))
                         .prefix(
                             Icon::new(AppIcon::Search)
                                 .size_3()
