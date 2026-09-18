@@ -70,10 +70,20 @@ Icons are Phosphor Light. `scripts/icons.sh` re-syncs them from npm.
 ## Layout
 
 ```
-src/main.rs      UI: sidebar, composer, settings, theme
-src/backend.rs   HTTP: validation, streaming, model lists, local paths
-assets/          icon, avatar, SVG icons
-scripts/         install, icon sync, window capture for UI checks
+src/main.rs         entry point and window setup
+src/app.rs          Chat state, sessions, sending, model loading, render root
+src/store.rs        on-disk sessions and keys
+src/gateway.rs      gateway presets
+src/theme.rs        fonts and palette
+src/assets.rs       embedded icons and the AppIcon enum
+src/backend.rs      HTTP: validation, streaming, model lists, local paths
+src/ui/sidebar.rs   nav, search, session list
+src/ui/composer.rs  input row, attach menu, model picker
+src/ui/messages.rs  message rows, empty state, placeholder pages
+src/ui/settings.rs  gateway dialog
+src/ui/chrome.rs    title bar and footer
+assets/             app icon, avatar, SVG icons
+scripts/            install, icon sync, window capture for UI checks
 ```
 
 ## Contributing

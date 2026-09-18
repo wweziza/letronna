@@ -23,7 +23,7 @@ cargo build --release
 
 ## Where things live
 
-- `src/main.rs` the whole UI. Views are small `fn` blocks on `Chat`.
+- `src/app.rs` state and actions on `Chat`. `src/ui/*` are `impl Chat` blocks, one file per surface.
 - `src/backend.rs` HTTP, validation, streaming, model lists. Tests live here.
 - `assets/icons` generated, do not edit by hand.
 

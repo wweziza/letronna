@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Pulls Phosphor Icons (Light weight) from npm and writes them into assets/icons
-# under the names gpui-component and src/main.rs expect. Re-run to refresh.
+# Pulls Phosphor Icons (Light weight) from npm into assets/icons.
+# File names follow what gpui-component's IconName loads (Lucide-style names such as
+# panel-left-close.svg), so the map below is "our name:phosphor name". Re-run to refresh.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 tmp=$(mktemp -d)
