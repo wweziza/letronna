@@ -116,18 +116,7 @@ impl Chat {
                     cx,
                 )
                 .into_any_element(),
-                "About" => text_page(
-                    "About",
-                    concat!(
-                        "Letronna v",
-                        env!("CARGO_PKG_VERSION"),
-                        " (",
-                        env!("GIT_HASH"),
-                        "). A small native desktop agent built with GPUI. MIT licensed."
-                    ),
-                    cx,
-                )
-                .into_any_element(),
+                "About" => about_page(cx).into_any_element(),
                 _ => gateway_page(&pick, &endpoint, &key, &chat, cx).into_any_element(),
             };
             dialog
@@ -196,6 +185,57 @@ fn label(text: &'static str, cx: &App) -> Div {
         .font_family(HEADING_FONT)
         .text_color(cx.theme().muted_foreground)
         .child(text)
+}
+
+fn about_page(cx: &App) -> Div {
+    let muted = cx.theme().muted_foreground;
+    v_flex().gap_6().child(heading("About", "", cx)).child(
+        h_flex()
+            .gap_6()
+            .items_start()
+            .child(
+                img("images/letronna.png")
+                    .size(px(160.))
+                    .rounded(cx.theme().radius_lg)
+                    .flex_shrink_0(),
+            )
+            .child(
+                v_flex()
+                    .gap_2()
+                    .child(
+                        div()
+                            .font_family(WORDMARK_FONT)
+                            .italic()
+                            .text_size(px(34.))
+                            .child(BRAND),
+                    )
+                    .child(div().text_sm().text_color(muted).child(concat!(
+                        "Version ",
+                        env!("CARGO_PKG_VERSION"),
+                        "  ·  build ",
+                        env!("GIT_HASH")
+                    )))
+                    .child(div().text_sm().pt_2().child(
+                        "A small native desktop agent. Rust, GPU rendered, no browser inside.",
+                    ))
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(muted)
+                            .child("Developed by the Gadlus Engineering team."),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(muted)
+                            .pt_4()
+                            .child("© 2026 Gadlus Engineering. Released under the MIT License."),
+                    )
+                    .child(div().text_xs().text_color(muted).child(
+                        "Built with GPUI and gpui-component (Apache-2.0). Icons by Phosphor (MIT).",
+                    )),
+            ),
+    )
 }
 
 fn text_page(title: &'static str, blurb: &'static str, cx: &App) -> Div {

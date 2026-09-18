@@ -5,6 +5,7 @@ impl AssetSource for Assets {
     fn load(&self, path: &str) -> Result<Option<Cow<'static, [u8]>>> {
         macro_rules! svg { ($($n:literal),*) => { match path {
             $(concat!("icons/", $n, ".svg") => Some(Cow::Borrowed(include_bytes!(concat!("../assets/icons/", $n, ".svg")))),)*
+            "images/letronna.png" => Some(Cow::Borrowed(&include_bytes!("../assets/letronna-front.png")[..])),
             _ => None,
         } } }
         Ok(svg!(
