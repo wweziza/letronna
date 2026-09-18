@@ -63,6 +63,7 @@ pub(crate) struct Chat {
     pub(crate) greeting: &'static str,
     pub(crate) free_remaining: Option<u64>,
     pub(crate) loading_models: bool,
+    pub(crate) gateway_error: Option<String>,
     pub(crate) busy: bool,
     pub(crate) partial: String,
     pub(crate) error: Option<String>,
@@ -144,6 +145,7 @@ impl Chat {
             greeting,
             free_remaining: None,
             loading_models: false,
+            gateway_error: None,
             store,
             composer,
             search,
@@ -188,8 +190,14 @@ impl Chat {
                 let _ = this.update(cx, |this, cx| {
                     this.loading_models = false;
                     match result {
-                        Ok(models) => this.models = models,
-                        Err(error) => this.error = Some(error),
+                        Ok(models) => {
+                            this.models = models;
+                            this.gateway_error = None;
+                        }
+                        Err(error) => {
+                            this.gateway_error = Some(error.clone());
+                            this.error = Some(error);
+                        }
                     }
                     cx.notify();
                 });
@@ -339,11 +347,7 @@ impl Chat {
 }
 
 impl Render for Chat {
-    fn render(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let active = self.store.active;
         let conversation = &self.store.conversations[active];
 

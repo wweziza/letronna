@@ -20,6 +20,32 @@ impl Chat {
         )
     }
 
+    fn gateway_chip(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let (dot, tip) = if self.loading_models {
+            (cx.theme().muted_foreground, "Checking gateway…".to_string())
+        } else if let Some(e) = &self.gateway_error {
+            (cx.theme().danger, e.clone())
+        } else {
+            (
+                cx.theme().green,
+                format!("{} models available", self.models.len()),
+            )
+        };
+        Button::new("gateway")
+            .ghost()
+            .xsmall()
+            .text_color(cx.theme().muted_foreground)
+            .tooltip(tip)
+            .child(
+                h_flex()
+                    .gap_1p5()
+                    .items_center()
+                    .child(div().size(px(6.)).rounded_full().bg(dot))
+                    .child(self.store.gateway.clone()),
+            )
+            .on_click(cx.listener(|this, _, window, cx| this.open_settings(window, cx)))
+    }
+
     pub(crate) fn status_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         h_flex()
             .h(px(20.))
@@ -28,6 +54,7 @@ impl Chat {
             .items_center()
             .text_xs()
             .text_color(cx.theme().muted_foreground)
+            .child(self.gateway_chip(cx))
             .when_some(self.free_remaining, |this, n| {
                 this.child(format!("{n} free replies left"))
             })

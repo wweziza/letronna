@@ -214,17 +214,5 @@ impl Chat {
                     .child(self.section("Sessions", cx))
                     .child(sessions),
             )
-            .child(
-                div().p_2().child(
-                    Button::new("settings")
-                        .ghost()
-                        .xsmall()
-                        .icon(Icon::new(IconName::Settings))
-                        .label("Settings")
-                        .on_click(
-                            cx.listener(|this, _, window, cx| this.open_settings(window, cx)),
-                        ),
-                ),
-            )
     }
 }

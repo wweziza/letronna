@@ -63,14 +63,16 @@ impl Chat {
             };
             let current = pick.read(cx).clone();
             let g = gateway(&current);
-            let mut chips = h_flex().flex_wrap().gap_1p5();
+            let mut list = v_flex().w(px(160.)).flex_shrink_0().gap_0p5().pr_4();
             for gw in GATEWAYS {
                 let chat = chat.clone();
                 let active = gw.name == current;
-                chips = chips.child(
+                list = list.child(
                     Button::new(gw.name)
                         .small()
-                        .map(|b| if active { b.primary() } else { b.outline() })
+                        .w_full()
+                        .justify_start()
+                        .map(|b| if active { b.primary() } else { b.ghost() })
                         .label(gw.name)
                         .on_click(move |_, window, cx| {
                             chat.update(cx, |this, cx| this.select_gateway(gw.name, window, cx))
@@ -89,10 +91,12 @@ impl Chat {
                 .title(div().font_family(HEADING_FONT).child("Settings"))
                 .w(window.viewport_size().width * 0.8)
                 .child(
+                    h_flex().items_start().py_2().child(list).child(
                     v_flex()
+                        .flex_1()
+                        .min_w_0()
                         .gap_4()
-                        .py_2()
-                        .child(v_flex().gap_1p5().child(label("Gateway", cx)).child(chips))
+                        .child(div().text_sm().font_family(HEADING_FONT).font_weight(FontWeight::MEDIUM).child(g.name))
                         .child(
                             div()
                                 .text_sm()
@@ -113,7 +117,7 @@ impl Chat {
                                     }),
                             ),
                         ),
-                )
+                ))
         });
     }
 }
