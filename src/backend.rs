@@ -5,12 +5,18 @@ use std::{
     time::Duration,
 };
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct Message {
     pub role: String,
     pub content: String,
     #[serde(default)]
     pub model: String,
+    #[serde(default)]
+    pub reasoning: String,
+    #[serde(default)]
+    pub tokens: u64,
+    #[serde(default)]
+    pub per_second: f32,
 }
 
 pub fn now() -> u64 {
@@ -31,6 +37,8 @@ pub struct Connection {
 
 pub enum Event {
     Delta(String),
+    Reasoning(String),
+    Usage { completion: u64, per_second: f32 },
     FreeRemaining(u64),
     Finished(Result<(), String>),
 }
@@ -110,7 +118,13 @@ fn body(connection: &Connection, messages: &[Message]) -> Value {
             .iter()
             .map(|m| json!({"role": m.role, "content": m.content})),
     );
-    json!({"model": wire_model(connection), "messages": context, "stream": true, "max_tokens": 1024})
+    json!({
+        "model": wire_model(connection),
+        "messages": context,
+        "stream": true,
+        "max_tokens": 1024,
+        "stream_options": {"include_usage": true}
+    })
 }
 
 fn unwrap_response(value: &Value) -> Result<&Value, String> {
@@ -129,13 +143,36 @@ fn unwrap_response(value: &Value) -> Result<&Value, String> {
     })
 }
 
-fn parse_event(data: &str) -> Result<Option<String>, String> {
+#[derive(Default)]
+struct Chunk {
+    content: Option<String>,
+    reasoning: Option<String>,
+    completion_tokens: Option<u64>,
+}
+
+fn parse_event(data: &str) -> Result<Chunk, String> {
     let value: Value = serde_json::from_str(data)
         .map_err(|_| "Provider returned an invalid stream event.".to_owned())?;
-    Ok(unwrap_response(&value)?
-        .pointer("/choices/0/delta/content")
+    let inner = unwrap_response(&value)?;
+    let delta = inner.pointer("/choices/0/delta");
+    let content = delta
+        .and_then(|d| d.get("content"))
         .and_then(Value::as_str)
-        .map(str::to_owned))
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned);
+    let reasoning = delta
+        .and_then(|d| d.get("reasoning_content").or_else(|| d.get("reasoning")))
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned);
+    let completion_tokens = inner
+        .pointer("/usage/completion_tokens")
+        .and_then(Value::as_u64);
+    Ok(Chunk {
+        content,
+        reasoning,
+        completion_tokens,
+    })
 }
 
 pub fn data_dir() -> std::path::PathBuf {
@@ -325,6 +362,8 @@ fn stream(
     }
     let mut received = false;
     let mut complete = false;
+    let mut completion_tokens = 0u64;
+    let began = std::time::Instant::now();
     for line in BufReader::new(response).lines() {
         let line =
             line.map_err(|_| "Connection interrupted before the response completed.".to_owned())?;
@@ -335,12 +374,28 @@ fn stream(
             complete = true;
             break;
         }
-        if let Some(text) = parse_event(data)? {
-            received |= !text.is_empty();
+        let chunk = parse_event(data)?;
+        if let Some(n) = chunk.completion_tokens {
+            completion_tokens = n;
+        }
+        if let Some(text) = chunk.reasoning {
+            sender
+                .send_blocking(Event::Reasoning(text))
+                .map_err(|_| "Chat closed.".to_owned())?;
+        }
+        if let Some(text) = chunk.content {
+            received = true;
             sender
                 .send_blocking(Event::Delta(text))
                 .map_err(|_| "Chat closed.".to_owned())?;
         }
+    }
+    if completion_tokens > 0 {
+        let secs = began.elapsed().as_secs_f32().max(0.001);
+        let _ = sender.send_blocking(Event::Usage {
+            completion: completion_tokens,
+            per_second: completion_tokens as f32 / secs,
+        });
     }
     if !complete {
         return Err(
@@ -383,12 +438,16 @@ mod tests {
     #[test]
     fn parses_text_and_provider_errors() {
         assert_eq!(
-            parse_event(r#"{"choices":[{"delta":{"content":"hello"}}]}"#).unwrap(),
+            parse_event(r#"{"choices":[{"delta":{"content":"hello"}}]}"#)
+                .unwrap()
+                .content,
             Some("hello".into())
         );
         assert!(parse_event(r#"{"error":{"message":"bad"}}"#).is_err());
         assert_eq!(
-            parse_event(r#"{"choices":[{"delta":{"role":"assistant"}}]}"#).unwrap(),
+            parse_event(r#"{"choices":[{"delta":{"role":"assistant"}}]}"#)
+                .unwrap()
+                .content,
             None
         );
     }
@@ -398,7 +457,8 @@ mod tests {
             parse_event(
                 r#"{"success":true,"data":{"choices":[{"delta":{"content":"AILE reply"}}]}}"#
             )
-            .unwrap(),
+            .unwrap()
+            .content,
             Some("AILE reply".into())
         );
         assert!(parse_event(r#"{"success":false,"message":"Quota exhausted"}"#).is_err());
@@ -436,13 +496,14 @@ mod tests {
             vec![Message {
                 role: "user".into(),
                 content: "Reply with exactly: Native chat works.".into(),
-                model: String::new(),
+                ..Default::default()
             }],
         );
         let mut text = String::new();
         loop {
             match rx.recv_blocking().unwrap() {
                 Event::Delta(chunk) => text.push_str(&chunk),
+                Event::Reasoning(_) | Event::Usage { .. } => {}
                 Event::FreeRemaining(_) => {}
                 Event::Finished(result) => {
                     result.unwrap();
@@ -459,7 +520,7 @@ mod tests {
             .map(|i| Message {
                 role: if i % 2 == 0 { "user" } else { "assistant" }.into(),
                 content: format!("message {i}"),
-                model: String::new(),
+                ..Default::default()
             })
             .collect();
         let payload = body(&connection(), &messages);
@@ -514,7 +575,7 @@ mod tests {
             vec![Message {
                 role: "user".into(),
                 content: "Hi".into(),
-                model: String::new(),
+                ..Default::default()
             }],
         );
         assert!(matches!(rx.recv_blocking().unwrap(), Event::Delta(s) if s == "Hello"));

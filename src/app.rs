@@ -69,6 +69,10 @@ pub(crate) struct Chat {
     pub(crate) gateway_error: Option<String>,
     pub(crate) busy: bool,
     pub(crate) partial: String,
+    pub(crate) partial_reasoning: String,
+    pub(crate) live_tokens: u64,
+    pub(crate) live_per_second: f32,
+    pub(crate) thinking_open: std::collections::HashSet<usize>,
     pub(crate) error: Option<String>,
     pub(crate) scroll: ScrollHandle,
     pub(crate) _subscriptions: Vec<Subscription>,
@@ -168,6 +172,10 @@ impl Chat {
             rename,
             busy: false,
             partial: String::new(),
+            partial_reasoning: String::new(),
+            live_tokens: 0,
+            live_per_second: 0.,
+            thinking_open: std::collections::HashSet::new(),
             error,
             scroll: ScrollHandle::new(),
             _subscriptions: subscriptions,
@@ -300,7 +308,7 @@ impl Chat {
         conversation.messages.push(Message {
             role: "user".into(),
             content: prompt,
-            model: String::new(),
+            ..Default::default()
         });
         let receiver = backend::start(connection, conversation.messages.clone());
         self.composer
@@ -310,6 +318,9 @@ impl Chat {
         let convo_title = self.store.conversations[self.store.active].title.clone();
         presence::set_active(cx, self.store.model.clone(), convo_title);
         self.partial.clear();
+        self.partial_reasoning.clear();
+        self.live_tokens = 0;
+        self.live_per_second = 0.;
         self.error = None;
         self.scroll.scroll_to_bottom();
         self.save();
@@ -321,6 +332,14 @@ impl Chat {
                     .update(cx, |this, cx| {
                         match event {
                             Event::Delta(text) => this.partial.push_str(&text),
+                            Event::Reasoning(text) => this.partial_reasoning.push_str(&text),
+                            Event::Usage {
+                                completion,
+                                per_second,
+                            } => {
+                                this.live_tokens = completion;
+                                this.live_per_second = per_second;
+                            }
                             Event::FreeRemaining(n) => this.free_remaining = Some(n),
                             Event::Finished(result) => {
                                 this.busy = false;
@@ -330,14 +349,21 @@ impl Chat {
                                         let model = this.store.model.clone();
                                         let c = &mut this.store.conversations[this.store.active];
                                         c.updated = backend::now();
+                                        let reasoning = std::mem::take(&mut this.partial_reasoning);
+                                        let tokens = this.live_tokens;
+                                        let per_second = this.live_per_second;
                                         c.messages.push(Message {
                                             role: "assistant".into(),
                                             content: std::mem::take(&mut this.partial),
                                             model,
+                                            reasoning,
+                                            tokens,
+                                            per_second,
                                         })
                                     }
                                     Err(error) => {
                                         this.partial.clear();
+                                        this.partial_reasoning.clear();
                                         this.error = Some(error);
                                     }
                                 }
@@ -419,6 +445,9 @@ impl Render for Chat {
                     role: "assistant".into(),
                     content: self.partial.clone(),
                     model: self.store.model.clone(),
+                    reasoning: self.partial_reasoning.clone(),
+                    tokens: self.live_tokens,
+                    per_second: self.live_per_second,
                 };
                 rows.push(
                     self.message_row(usize::MAX, &live, true, window, cx)

@@ -22,6 +22,7 @@ impl AssetSource for Assets {
             "panel-left-close",
             "panel-left-open",
             "chevron-down",
+            "chevron-right",
             "check",
             "loader-circle",
             "loader",
