@@ -33,6 +33,12 @@ pub enum Event {
     Finished(Result<(), String>),
 }
 
+/// Free-catalog models go through the guest endpoint only when no API key is set.
+/// With a key, every model uses the authenticated OpenAI-compatible route.
+pub fn uses_guest_route(connection: &Connection) -> bool {
+    connection.model.starts_with("aile-free/") && connection.key.trim().is_empty()
+}
+
 pub fn validate(connection: &Connection) -> Result<String, String> {
     let url = reqwest::Url::parse(connection.endpoint.trim())
         .map_err(|_| "Enter a valid endpoint, such as http://localhost:11434/v1".to_owned())?;
@@ -55,7 +61,7 @@ pub fn validate(connection: &Connection) -> Result<String, String> {
         return Err("Enter the model ID served by your provider in Connection settings.".into());
     }
     let base = connection.endpoint.trim().trim_end_matches('/');
-    if connection.model.starts_with("aile-free/") {
+    if uses_guest_route(connection) {
         if base != "https://api.aile.sh/v1" {
             return Err("Aile Free models use the AILE connection: https://api.aile.sh/v1".into());
         }
@@ -256,7 +262,7 @@ fn stream(
         .build()
         .map_err(|_| "Could not initialize the HTTP client.".to_owned())?;
     let mut request = client.post(endpoint).json(&body(connection, messages));
-    let free_remaining = if connection.model.starts_with("aile-free/") {
+    let free_remaining = if uses_guest_route(connection) {
         let (cookie, remaining) = free_session(&client)?;
         request = request.header(reqwest::header::COOKIE, cookie);
         let _ = sender.send_blocking(Event::FreeRemaining(remaining));
@@ -390,6 +396,14 @@ mod tests {
         assert_eq!(
             validate(&c).unwrap(),
             "https://chat.aile.sh/api/free/chat/completions"
+        );
+        let with_key = Connection {
+            key: "sk-test".into(),
+            ..c
+        };
+        assert_eq!(
+            validate(&with_key).unwrap(),
+            "https://api.aile.sh/v1/chat/completions"
         );
     }
     #[test]

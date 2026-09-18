@@ -178,9 +178,9 @@ impl Chat {
             return;
         }
         self.loading_models = true;
-        let free = self.store.gateway == GATEWAYS[0].name;
         let base = self.endpoint.read(cx).value().to_string();
         let key = self.key.read(cx).value().to_string();
+        let free = self.store.gateway == GATEWAYS[0].name && key.trim().is_empty();
         let (tx, rx) = async_channel::bounded(1);
         std::thread::spawn(move || {
             let result = if free {
