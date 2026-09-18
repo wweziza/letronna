@@ -189,7 +189,11 @@ impl Chat {
                 let mut models = backend::free_models().unwrap_or_default();
                 match backend::list_models(&base, &key) {
                     Ok(paid) => {
-                        models.extend(paid.into_iter().filter(|m| !models.contains(m)));
+                        for m in paid {
+                            if !models.contains(&m) {
+                                models.push(m);
+                            }
+                        }
                         Ok(models)
                     }
                     Err(e) if models.is_empty() => Err(e),
