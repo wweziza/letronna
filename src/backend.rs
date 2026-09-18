@@ -39,6 +39,16 @@ pub fn uses_guest_route(connection: &Connection) -> bool {
     connection.model.starts_with("aile-free/") && connection.key.trim().is_empty()
 }
 
+/// The marketplace API does not know the `aile-free/` prefix; with a key, send the bare id
+/// so the router picks a provider. The guest route keeps the full id.
+pub fn wire_model(connection: &Connection) -> &str {
+    let model = connection.model.trim();
+    if uses_guest_route(connection) {
+        return model;
+    }
+    model.strip_prefix("aile-free/").unwrap_or(model)
+}
+
 pub fn validate(connection: &Connection) -> Result<String, String> {
     let url = reqwest::Url::parse(connection.endpoint.trim())
         .map_err(|_| "Enter a valid endpoint, such as http://localhost:11434/v1".to_owned())?;
@@ -97,7 +107,7 @@ fn body(connection: &Connection, messages: &[Message]) -> Value {
             .iter()
             .map(|m| json!({"role": m.role, "content": m.content})),
     );
-    json!({"model": connection.model.trim(), "messages": context, "stream": true, "max_tokens": 1024})
+    json!({"model": wire_model(connection), "messages": context, "stream": true, "max_tokens": 1024})
 }
 
 fn unwrap_response(value: &Value) -> Result<&Value, String> {
@@ -405,6 +415,7 @@ mod tests {
             validate(&with_key).unwrap(),
             "https://api.aile.sh/v1/chat/completions"
         );
+        assert_eq!(wire_model(&with_key), "gpt-oss-20b");
     }
     #[test]
     #[ignore = "Uses one real AILE guest prompt; run explicitly"]

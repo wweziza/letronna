@@ -369,8 +369,21 @@ impl Chat {
 impl Render for Chat {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if let Some(error) = self.error.take() {
+            let text = error.clone();
             window.push_notification(
-                gpui_component::notification::Notification::error(error).autohide(false),
+                gpui_component::notification::Notification::error(error)
+                    .autohide(false)
+                    .action(move |_, _, _| {
+                        let text = text.clone();
+                        Button::new("copy-error")
+                            .ghost()
+                            .xsmall()
+                            .icon(Icon::new(IconName::Copy))
+                            .tooltip("Copy message")
+                            .on_click(move |_, _, cx| {
+                                cx.write_to_clipboard(ClipboardItem::new_string(text.clone()))
+                            })
+                    }),
                 cx,
             );
         }

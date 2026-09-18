@@ -18,7 +18,10 @@ impl Chat {
             message.model.clone()
         };
         let body: AnyElement = if is_user {
-            div().child(message.content.clone()).into_any_element()
+            TextView::markdown(("md", index), message.content.clone(), window, cx)
+                .text(message.content.clone())
+                .selectable(true)
+                .into_any_element()
         } else if message.content.is_empty() {
             div()
                 .text_color(cx.theme().muted_foreground)
