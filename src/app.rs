@@ -59,6 +59,7 @@ pub(crate) struct Chat {
     pub(crate) keys: std::collections::HashMap<String, String>,
     pub(crate) gateway_pick: Entity<String>,
     pub(crate) settings_page: Entity<&'static str>,
+    pub(crate) rename: Entity<InputState>,
     pub(crate) page: Page,
     pub(crate) sidebar_open: bool,
     pub(crate) greeting: &'static str,
@@ -130,6 +131,7 @@ impl Chat {
         let model_search = cx.new(|cx| InputState::new(window, cx).placeholder("Search models…"));
         let gateway_pick = cx.new(|_| store.gateway.clone());
         let settings_page = cx.new(|_| "Gateways");
+        let rename = cx.new(|cx| InputState::new(window, cx).placeholder("Session name"));
         let subscriptions = vec![
             cx.subscribe_in(&model_search, window, |_, _, _: &InputEvent, _, cx| {
                 cx.notify()
@@ -160,6 +162,7 @@ impl Chat {
             keys,
             gateway_pick,
             settings_page,
+            rename,
             busy: false,
             partial: String::new(),
             error,

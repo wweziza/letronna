@@ -57,6 +57,7 @@ impl Chat {
     ) -> impl IntoElement {
         let c = &self.store.conversations[index];
         let active = index == self.store.active && self.page == Page::Chat;
+        let menu = self.session_menu(index, cx);
         h_flex()
             .id(("session", index))
             .h(px(26.))
@@ -97,6 +98,7 @@ impl Chat {
                 this.save();
                 cx.notify();
             }))
+            .context_menu(menu)
     }
 
     pub(crate) fn sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {

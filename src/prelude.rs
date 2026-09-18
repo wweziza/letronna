@@ -7,7 +7,7 @@ pub(crate) use gpui_component::{
     h_flex,
     input::{Input, InputEvent, InputState},
     kbd::Kbd,
-    menu::{DropdownMenu, PopupMenuItem},
+    menu::{ContextMenuExt, DropdownMenu, PopupMenuItem},
     scroll::ScrollableElement,
     text::TextView,
     v_flex,
