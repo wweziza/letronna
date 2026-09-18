@@ -1,16 +1,12 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 mod app;
 mod assets;
-mod backend;
-mod gateway;
+mod core;
+#[cfg(windows)]
+mod platform;
+mod plugins;
 mod prelude;
-mod presence;
-#[cfg(windows)]
-mod setup;
-mod store;
 mod theme;
-#[cfg(windows)]
-mod tray;
 mod ui;
 
 use prelude::*;
@@ -19,16 +15,21 @@ fn main() {
     #[cfg(windows)]
     {
         if std::env::args().any(|a| a == "--uninstall") {
-            setup::uninstall();
+            platform::install::uninstall();
         }
-        if setup::ensure_installed() || !setup::single_instance() {
+        if platform::install::ensure_installed() || !platform::install::single_instance() {
             return;
         }
     }
     Application::new().with_assets(Assets).run(|cx| {
         gpui_component::init(cx);
         theme::apply(cx);
-        presence::init(cx, presence::PresenceMode::Detailed);
+        plugins::init(
+            cx,
+            vec![Box::new(plugins::discord::DiscordPresence::new(
+                plugins::PresenceMode::Detailed,
+            ))],
+        );
         cx.bind_keys([
             KeyBinding::new("ctrl-n", NewSession, None),
             KeyBinding::new(
@@ -38,7 +39,7 @@ fn main() {
             ),
         ]);
         #[cfg(windows)]
-        tray::init(cx);
+        platform::tray::init(cx);
         cx.on_window_closed(|cx| {
             if cx.windows().is_empty() {
                 cx.quit();
@@ -69,7 +70,7 @@ fn main() {
         #[cfg(windows)]
         let _ = window.update(cx, |_, window, cx| {
             window.on_window_should_close(cx, |window, _| {
-                tray::hide(window);
+                platform::window::hide(window);
                 false
             });
         });

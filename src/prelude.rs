@@ -18,9 +18,9 @@ pub(crate) use std::{borrow::Cow, path::PathBuf};
 pub(crate) use crate::{
     app::*,
     assets::*,
-    backend::{self, Connection, Event, Message},
-    gateway::*,
-    presence,
-    store::*,
+    core::chat::{self as backend, Connection, Event, Message},
+    core::gateway::*,
+    core::store::*,
+    plugins,
     theme::*,
 };

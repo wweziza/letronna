@@ -79,24 +79,36 @@ Icons are Phosphor Light. `scripts/icons.sh` re-syncs them from npm.
 ## Layout
 
 ```
-src/main.rs         entry point and window setup
-src/app.rs          Chat state, sessions, sending, model loading, render root
-src/store.rs        on-disk sessions and keys
-src/gateway.rs      gateway presets
+src/main.rs         entry point: wires plugins, tray, window
+src/app.rs          Chat state, sessions, sending, render root
+src/prelude.rs      shared imports
 src/theme.rs        fonts and palette
 src/assets.rs       embedded icons and the AppIcon enum
-src/backend.rs      HTTP: validation, streaming, model lists, local paths
-src/ui/sidebar.rs   nav, search, session list
-src/ui/composer.rs  input row, attach menu, model picker
-src/ui/messages.rs  message rows, empty state, placeholder pages
-src/ui/settings.rs  gateway dialog
-src/ui/chrome.rs    title bar and footer
-src/tray.rs         notification-area icon and menu (Windows)
-src/presence.rs     Discord rich presence
-src/setup.rs        first-run registration and --uninstall (Windows)
-assets/             app icon, avatar, SVG icons
+
+src/core/           domain layer (no UI, no OS)
+  chat.rs           HTTP: validation, streaming, model lists, reasoning, usage
+  gateway.rs        gateway presets
+  store.rs          on-disk sessions and keys
+
+src/ui/             view surfaces (impl Chat blocks)
+  sidebar.rs composer.rs messages.rs settings.rs sessions.rs chrome.rs
+
+src/plugins/        optional integrations behind a Plugin trait + event bus
+  mod.rs            Plugin trait, AppEvent, registry, emit()
+  discord.rs        Discord rich presence
+
+src/platform/       Windows-only OS integration (cfg(windows))
+  install.rs        first-run registration and --uninstall
+  tray.rs           notification-area icon and menu
+  window.rs         Win32 window helpers
+
+assets/             icon, avatar, SVG icons
 scripts/            icon sync, window capture for UI checks
 ```
+
+Adding an integration (a new plugin) is one file in `src/plugins` implementing
+`Plugin`, plus one line in `main`. The app only emits `AppEvent`s; it never
+calls a plugin directly.
 
 ## Contributing
 

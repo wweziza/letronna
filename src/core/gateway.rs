@@ -1,4 +1,5 @@
-use crate::prelude::*;
+
+pub(crate) const AILE: &str = "https://api.aile.sh/v1";
 
 pub(crate) struct Gateway {
     pub(crate) name: &'static str,

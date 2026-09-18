@@ -1,7 +1,6 @@
 use crate::prelude::*;
 
 pub(crate) const BRAND: &str = "Letronna";
-pub(crate) const AILE: &str = "https://api.aile.sh/v1";
 
 pub(crate) const GREETINGS: &[&str] = &[
     "Letronna is ready.",
@@ -181,7 +180,10 @@ impl Chat {
             _subscriptions: subscriptions,
         };
         this.load_models(window, cx);
-        presence::set_mode(cx, presence::PresenceMode::from_str(&this.store.presence));
+        plugins::emit(
+            cx,
+            plugins::AppEvent::PresenceMode(plugins::PresenceMode::from_str(&this.store.presence)),
+        );
         this
     }
 
@@ -316,7 +318,13 @@ impl Chat {
         self.busy = true;
         self.page = Page::Chat;
         let convo_title = self.store.conversations[self.store.active].title.clone();
-        presence::set_active(cx, self.store.model.clone(), convo_title);
+        plugins::emit(
+            cx,
+            plugins::AppEvent::ChatStarted {
+                model: self.store.model.clone(),
+                title: convo_title,
+            },
+        );
         self.partial.clear();
         self.partial_reasoning.clear();
         self.live_tokens = 0;
@@ -343,7 +351,7 @@ impl Chat {
                             Event::FreeRemaining(n) => this.free_remaining = Some(n),
                             Event::Finished(result) => {
                                 this.busy = false;
-                                presence::set_idle(cx);
+                                plugins::emit(cx, plugins::AppEvent::ChatIdle);
                                 match result {
                                     Ok(()) => {
                                         let model = this.store.model.clone();

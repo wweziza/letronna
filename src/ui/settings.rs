@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-type ApplyMode = std::rc::Rc<dyn Fn(presence::PresenceMode, &mut App)>;
+type ApplyMode = std::rc::Rc<dyn Fn(plugins::PresenceMode, &mut App)>;
 
 const PAGES: &[(&str, AppIcon)] = &[
     ("Gateways", AppIcon::Plugs),
@@ -205,18 +205,18 @@ fn label(text: &'static str, cx: &App) -> Div {
 }
 
 fn privacy_page(chat: &Entity<Chat>, presence: &Entity<String>, cx: &App) -> Div {
-    let current = presence::PresenceMode::from_str(presence.read(cx));
-    let enabled = current != presence::PresenceMode::Off;
+    let current = plugins::PresenceMode::from_str(presence.read(cx));
+    let enabled = current != plugins::PresenceMode::Off;
 
     let apply: ApplyMode = {
         let chat = chat.clone();
         let presence = presence.clone();
-        std::rc::Rc::new(move |mode: presence::PresenceMode, cx: &mut App| {
+        std::rc::Rc::new(move |mode: plugins::PresenceMode, cx: &mut App| {
             presence.update(cx, |p, cx| {
                 *p = mode.as_str().into();
                 cx.notify();
             });
-            presence::set_mode(cx, mode);
+            plugins::emit(cx, plugins::AppEvent::PresenceMode(mode));
             chat.update(cx, |this, cx| {
                 this.store.presence = mode.as_str().into();
                 this.save();
@@ -227,9 +227,9 @@ fn privacy_page(chat: &Entity<Chat>, presence: &Entity<String>, cx: &App) -> Div
 
     let switch_apply = apply.clone();
     let next = if enabled {
-        presence::PresenceMode::Off
+        plugins::PresenceMode::Off
     } else {
-        presence::PresenceMode::Detailed
+        plugins::PresenceMode::Detailed
     };
     let toggle = h_flex()
         .items_center()
@@ -259,7 +259,7 @@ fn privacy_page(chat: &Entity<Chat>, presence: &Entity<String>, cx: &App) -> Div
                 .on_click(move |_, _, cx| switch_apply(next, cx)),
         );
 
-    let level_label = if current == presence::PresenceMode::Minimal {
+    let level_label = if current == plugins::PresenceMode::Minimal {
         "Hide activity details"
     } else {
         "Show what I am doing"
@@ -296,16 +296,16 @@ fn privacy_page(chat: &Entity<Chat>, presence: &Entity<String>, cx: &App) -> Div
                     menu.min_w(px(220.))
                         .item(
                             PopupMenuItem::new("Show what I am doing")
-                                .checked(current == presence::PresenceMode::Detailed)
+                                .checked(current == plugins::PresenceMode::Detailed)
                                 .on_click(move |_, _, cx| {
-                                    detailed(presence::PresenceMode::Detailed, cx)
+                                    detailed(plugins::PresenceMode::Detailed, cx)
                                 }),
                         )
                         .item(
                             PopupMenuItem::new("Hide activity details")
-                                .checked(current == presence::PresenceMode::Minimal)
+                                .checked(current == plugins::PresenceMode::Minimal)
                                 .on_click(move |_, _, cx| {
-                                    minimal(presence::PresenceMode::Minimal, cx)
+                                    minimal(plugins::PresenceMode::Minimal, cx)
                                 }),
                         )
                 }),

@@ -58,7 +58,7 @@ fn main_window(cx: &App) -> Option<AnyWindowHandle> {
 fn show_main_window(cx: &mut App) {
     if let Some(handle) = main_window(cx) {
         let _ = handle.update(cx, |_, window, _| {
-            set_visible(window, true);
+            super::window::set_visible(window, true);
             window.activate_window();
         });
     }
@@ -97,7 +97,7 @@ struct TrayMenu {
 
 impl TrayMenu {
     fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        make_topmost(window);
+        super::window::make_topmost(window);
         let opened = std::time::Instant::now();
         let activation = cx.observe_window_activation(window, move |_, window, _| {
             if !window.is_window_active() && opened.elapsed() > Duration::from_millis(200) {
@@ -173,46 +173,5 @@ impl Render for TrayMenu {
                     .with_easing(gpui::ease_out_quint()),
                 |el, delta| el.opacity(delta).mt(px(8. * (1. - delta))),
             )
-    }
-}
-
-pub(crate) fn hide(window: &mut Window) {
-    set_visible(window, false);
-}
-
-fn hwnd(window: &Window) -> Option<*mut core::ffi::c_void> {
-    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-    let handle = HasWindowHandle::window_handle(window).ok()?;
-    match handle.as_raw() {
-        RawWindowHandle::Win32(h) => Some(h.hwnd.get() as *mut core::ffi::c_void),
-        _ => None,
-    }
-}
-
-fn make_topmost(window: &Window) {
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE, SetForegroundWindow, SetWindowPos,
-    };
-    let Some(hwnd) = hwnd(window) else {
-        return;
-    };
-    unsafe {
-        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-        SetForegroundWindow(hwnd);
-    }
-}
-
-fn set_visible(window: &Window, visible: bool) {
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        SW_HIDE, SW_SHOW, SetForegroundWindow, ShowWindow,
-    };
-    let Some(hwnd) = hwnd(window) else {
-        return;
-    };
-    unsafe {
-        ShowWindow(hwnd, if visible { SW_SHOW } else { SW_HIDE });
-        if visible {
-            SetForegroundWindow(hwnd);
-        }
     }
 }

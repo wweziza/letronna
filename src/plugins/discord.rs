@@ -1,6 +1,8 @@
-//! Discord rich presence. Runs the blocking IPC on its own thread and receives
-//! state updates over a channel, so the UI thread never blocks on Discord.
+//! Discord rich presence, as a [`Plugin`]. The blocking IPC runs on its own
+//! thread; `handle` only forwards a message down a channel, so the UI never
+//! waits on Discord.
 
+use super::{AppEvent, Plugin};
 use crate::prelude::*;
 use discord_rich_presence::{DiscordIpc, DiscordIpcClient, activity};
 use std::sync::mpsc::{Sender, channel};
@@ -27,12 +29,7 @@ const PHRASES: &[&str] = &[
     "Lost in a prompt…",
 ];
 
-pub(crate) enum Update {
-    Idle,
-    Active { model: String, title: String },
-    Mode(PresenceMode),
-}
-
+/// How much of the activity to share on Discord.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PresenceMode {
     /// Show the conversation and model.
@@ -60,8 +57,44 @@ impl PresenceMode {
     }
 }
 
-struct Bridge(Sender<Update>);
-impl Global for Bridge {}
+/// Messages sent to the presence thread.
+enum Update {
+    Idle,
+    Active { model: String, title: String },
+    Mode(PresenceMode),
+}
+
+/// The plugin holds the channel to its worker thread.
+pub(crate) struct DiscordPresence {
+    tx: Sender<Update>,
+    initial: PresenceMode,
+}
+
+impl DiscordPresence {
+    pub(crate) fn new(initial: PresenceMode) -> Self {
+        let (tx, rx) = channel();
+        spawn_worker(rx, initial);
+        Self { tx, initial }
+    }
+}
+
+impl Plugin for DiscordPresence {
+    fn init(&self, _cx: &mut App) {
+        let _ = self.tx.send(Update::Mode(self.initial));
+    }
+
+    fn handle(&self, event: &AppEvent) {
+        let update = match event {
+            AppEvent::ChatStarted { model, title } => Update::Active {
+                model: model.clone(),
+                title: title.clone(),
+            },
+            AppEvent::ChatIdle => Update::Idle,
+            AppEvent::PresenceMode(mode) => Update::Mode(*mode),
+        };
+        let _ = self.tx.send(update);
+    }
+}
 
 fn pick_phrase() -> &'static str {
     let n = SystemTime::now()
@@ -71,9 +104,8 @@ fn pick_phrase() -> &'static str {
     PHRASES[n % PHRASES.len()]
 }
 
-pub(crate) fn init(cx: &mut App, mode: PresenceMode) {
+fn spawn_worker(rx: std::sync::mpsc::Receiver<Update>, mode: PresenceMode) {
     let app_id = std::env::var("LETRONNA_DISCORD_APP_ID").unwrap_or_else(|_| APP_ID.into());
-    let (tx, rx) = channel::<Update>();
     let start = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
@@ -82,7 +114,7 @@ pub(crate) fn init(cx: &mut App, mode: PresenceMode) {
     std::thread::spawn(move || {
         let mut client = DiscordIpcClient::new(&app_id);
         let mut connected = client.connect().is_ok();
-        let mut state = Update::Idle;
+        let mut busy = false;
         let mut model = String::new();
         let mut title = String::new();
         let mut phrase = pick_phrase();
@@ -94,15 +126,12 @@ pub(crate) fn init(cx: &mut App, mode: PresenceMode) {
                     phrase = pick_phrase();
                 }
                 Ok(Update::Active { model: m, title: t }) => {
+                    busy = true;
                     model = m;
                     title = t;
-                    state = Update::Active {
-                        model: model.clone(),
-                        title: title.clone(),
-                    };
                 }
                 Ok(Update::Idle) => {
-                    state = Update::Idle;
+                    busy = false;
                     phrase = pick_phrase();
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
@@ -120,9 +149,6 @@ pub(crate) fn init(cx: &mut App, mode: PresenceMode) {
                     continue;
                 }
             }
-            let busy = matches!(state, Update::Active { .. });
-            // Detailed: line 1 is the conversation, line 2 is the model.
-            // Minimal: line 1 is "In Letronna", line 2 is a vague status.
             let (details, state_line, small_image, small_text) = if mode == PresenceMode::Minimal {
                 (
                     "In Letronna".to_string(),
@@ -141,16 +167,12 @@ pub(crate) fn init(cx: &mut App, mode: PresenceMode) {
                 } else {
                     model.clone()
                 };
-                if busy {
-                    (
-                        convo,
-                        model_line,
-                        "generating".into(),
-                        "Generating".to_string(),
-                    )
+                let (badge, badge_text) = if busy {
+                    ("generating", "Generating")
                 } else {
-                    (convo, model_line, "idle".into(), "Idle".to_string())
-                }
+                    ("idle", "Idle")
+                };
+                (convo, model_line, badge.to_string(), badge_text.to_string())
             };
             let mut activity = activity::Activity::new()
                 .activity_type(activity::ActivityType::Competing)
@@ -160,8 +182,8 @@ pub(crate) fn init(cx: &mut App, mode: PresenceMode) {
                     activity::Assets::new()
                         .large_image("letronna")
                         .large_text("Letronna")
-                        .small_image(small_image)
-                        .small_text(small_text),
+                        .small_image(&small_image)
+                        .small_text(&small_text),
                 )
                 .buttons(vec![activity::Button::new("Get Letronna", SITE)]);
             if busy {
@@ -174,24 +196,4 @@ pub(crate) fn init(cx: &mut App, mode: PresenceMode) {
         }
         let _ = client.close();
     });
-
-    cx.set_global(Bridge(tx));
-}
-
-fn send(cx: &App, update: Update) {
-    if let Some(bridge) = cx.try_global::<Bridge>() {
-        let _ = bridge.0.send(update);
-    }
-}
-
-pub(crate) fn set_idle(cx: &App) {
-    send(cx, Update::Idle);
-}
-
-pub(crate) fn set_active(cx: &App, model: String, title: String) {
-    send(cx, Update::Active { model, title });
-}
-
-pub(crate) fn set_mode(cx: &App, mode: PresenceMode) {
-    send(cx, Update::Mode(mode));
 }
