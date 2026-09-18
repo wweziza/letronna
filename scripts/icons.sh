@@ -13,7 +13,8 @@ map="plus:plus close:x window-close:x window-minimize:minus window-maximize:squa
 minus:minus settings:gear arrow-up:arrow-up copy:copy panel-left-close:sidebar-simple panel-left-open:sidebar-simple
 chevron-down:caret-down check:check loader-circle:circle-notch bot:robot mic:microphone chevrons-up-down:caret-up-down
 inbox:tray send:paper-plane-tilt sparkles:sparkle message-square:chat-teardrop file:file file-text:file-text clock:clock
-search:magnifying-glass pin:push-pin folder:folder image:image square-pen:note-pencil list-filter:funnel-simple"
+search:magnifying-glass pin:push-pin folder:folder image:image square-pen:note-pencil list-filter:funnel-simple
+info:info plugs:plugs palette:palette"
 for pair in $map; do
   cp "$src/${pair#*:}-light.svg" "assets/icons/${pair%%:*}.svg"
 done

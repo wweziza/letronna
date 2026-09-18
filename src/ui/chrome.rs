@@ -21,14 +21,23 @@ impl Chat {
     }
 
     fn gateway_chip(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let (dot, tip) = if self.loading_models {
-            (cx.theme().muted_foreground, "Checking gateway…".to_string())
+        let (dot, state, tip) = if self.loading_models {
+            (
+                cx.theme().muted_foreground,
+                "checking",
+                format!("{}: loading model list", self.store.gateway),
+            )
         } else if let Some(e) = &self.gateway_error {
-            (cx.theme().danger, e.clone())
+            (
+                cx.theme().danger,
+                "error",
+                format!("{}: {e}", self.store.gateway),
+            )
         } else {
             (
                 cx.theme().green,
-                format!("{} models available", self.models.len()),
+                "ready",
+                format!("{}: {} models", self.store.gateway, self.models.len()),
             )
         };
         Button::new("gateway")
@@ -41,7 +50,8 @@ impl Chat {
                     .gap_1p5()
                     .items_center()
                     .child(div().size(px(6.)).rounded_full().bg(dot))
-                    .child(self.store.gateway.clone()),
+                    .child(div().text_color(cx.theme().foreground).child("Gateway"))
+                    .child(state),
             )
             .on_click(cx.listener(|this, _, window, cx| this.open_settings(window, cx)))
     }
