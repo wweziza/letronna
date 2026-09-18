@@ -427,7 +427,7 @@ impl Render for Chat {
                         .child(
                             h_flex()
                                 .w_full()
-                                .items_center()
+                                .items_start()
                                 .gap_2()
                                 .px_3()
                                 .py_1p5()
@@ -435,7 +435,7 @@ impl Render for Chat {
                                 .bg(cx.theme().danger.opacity(0.15))
                                 .text_color(cx.theme().danger)
                                 .text_sm()
-                                .child(div().flex_1().child(error))
+                                .child(div().flex_1().min_w_0().whitespace_normal().child(error))
                                 .child(
                                     Button::new("dismiss-error")
                                         .ghost()
