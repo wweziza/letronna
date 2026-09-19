@@ -5,6 +5,7 @@ impl Chat {
         &self,
         index: usize,
         message: &Message,
+        labeled: bool,
         streaming: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -72,41 +73,43 @@ impl Chat {
         v_flex()
             .w_full()
             .gap_2p5()
-            .child(
-                h_flex()
-                    .items_center()
-                    .gap_2()
-                    .text_xs()
-                    .font_family(HEADING_FONT)
-                    .child(
-                        div()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(if is_user {
-                                cx.theme().muted_foreground
-                            } else {
-                                cx.theme().primary
-                            })
-                            .child(label),
-                    )
-                    .when(streaming, |this| {
-                        this.child(
+            .when(labeled, |this| {
+                this.child(
+                    h_flex()
+                        .items_center()
+                        .gap_2()
+                        .text_xs()
+                        .font_family(HEADING_FONT)
+                        .child(
                             div()
-                                .size(px(6.))
-                                .rounded_full()
-                                .bg(cx.theme().primary)
-                                .with_animation(
-                                    "pulse",
-                                    Animation::new(std::time::Duration::from_millis(1000))
-                                        .repeat()
-                                        .with_easing(ease_in_out),
-                                    |dot, delta| {
-                                        let wave = 1.0 - (delta * 2.0 - 1.0).abs();
-                                        dot.opacity(0.25 + 0.75 * wave)
-                                    },
-                                ),
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(if is_user {
+                                    cx.theme().muted_foreground
+                                } else {
+                                    cx.theme().primary
+                                })
+                                .child(label),
                         )
-                    }),
-            )
+                        .when(streaming, |this| {
+                            this.child(
+                                div()
+                                    .size(px(6.))
+                                    .rounded_full()
+                                    .bg(cx.theme().primary)
+                                    .with_animation(
+                                        "pulse",
+                                        Animation::new(std::time::Duration::from_millis(1000))
+                                            .repeat()
+                                            .with_easing(ease_in_out),
+                                        |dot, delta| {
+                                            let wave = 1.0 - (delta * 2.0 - 1.0).abs();
+                                            dot.opacity(0.25 + 0.75 * wave)
+                                        },
+                                    ),
+                            )
+                        }),
+                )
+            })
             .when(!is_user && (!message.reasoning.is_empty()), |this| {
                 this.child(self.thinking_block(index, message, streaming, window, cx))
             })
@@ -181,7 +184,13 @@ impl Chat {
                             .text_color(cx.theme().foreground)
                             .child(message.name.clone()),
                     )
-                    .child(div().font_family(MONO_FONT).child(summary))
+                    .child(
+                        div()
+                            .font_family(MONO_FONT)
+                            .max_w(relative(0.6))
+                            .truncate()
+                            .child(summary),
+                    )
                     .child(div().text_color(color).truncate().child(status))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if !this.thinking_open.remove(&index) {
@@ -193,16 +202,23 @@ impl Chat {
             .when(open, |this| {
                 this.child(
                     div()
+                        .id(("tool-out", index))
+                        .occlude()
                         .ml_2()
                         .pl_3()
+                        .max_h(px(220.))
                         .border_l_2()
                         .border_color(cx.theme().border)
-                        .text_xs()
-                        .font_family(MONO_FONT)
-                        .line_height(px(18.))
-                        .text_color(cx.theme().muted_foreground)
-                        .whitespace_normal()
-                        .child(crate::core::tools::clamp_lines(&content, 80)),
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_family(MONO_FONT)
+                                .line_height(px(18.))
+                                .text_color(cx.theme().muted_foreground)
+                                .whitespace_normal()
+                                .child(crate::core::tools::clamp_lines(&content, 400))
+                                .overflow_y_scrollbar(),
+                        ),
                 )
             })
     }

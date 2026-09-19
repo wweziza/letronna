@@ -152,7 +152,22 @@ fn body(connection: &Connection, messages: &[Message]) -> Value {
         system.push_str(" You have no tools or filesystem access on this gateway.");
     }
     let mut context = vec![json!({"role": "system", "content": system})];
-    context.extend(messages[start..].iter().map(wire_message));
+    let window = &messages[start..];
+    for (i, m) in window.iter().enumerate() {
+        context.push(wire_message(m));
+        // Every tool call must be answered or providers reject the whole
+        // request. A call can be left dangling if the app closed on the card.
+        for call in &m.tool_calls {
+            let answered = window[i + 1..]
+                .iter()
+                .take_while(|n| n.role == "tool")
+                .any(|n| n.tool_call_id == call.id);
+            if !answered {
+                context.push(json!({"role": "tool", "tool_call_id": call.id,
+                    "content": "Interrupted before this ran; no result."}));
+            }
+        }
+    }
     let mut body = json!({
         "model": wire_model(connection),
         "messages": context,
@@ -721,6 +736,51 @@ mod tests {
             &[],
         );
         assert_eq!(tools["tools"].as_array().unwrap().len(), 7);
+    }
+    #[test]
+    fn dangling_tool_calls_get_placeholder_results() {
+        let messages = vec![
+            Message {
+                role: "user".into(),
+                content: "go".into(),
+                ..Default::default()
+            },
+            Message {
+                role: "assistant".into(),
+                tool_calls: vec![
+                    ToolCall {
+                        id: "a".into(),
+                        name: "read_file".into(),
+                        arguments: "{}".into(),
+                    },
+                    ToolCall {
+                        id: "b".into(),
+                        name: "read_file".into(),
+                        arguments: "{}".into(),
+                    },
+                ],
+                ..Default::default()
+            },
+            Message {
+                role: "tool".into(),
+                tool_call_id: "b".into(),
+                content: "ok".into(),
+                ..Default::default()
+            },
+            Message {
+                role: "user".into(),
+                content: "again".into(),
+                ..Default::default()
+            },
+        ];
+        let payload = body(&connection(), &messages);
+        let context = payload["messages"].as_array().unwrap();
+        let tools: Vec<&str> = context
+            .iter()
+            .filter(|m| m["role"] == "tool")
+            .map(|m| m["tool_call_id"].as_str().unwrap())
+            .collect();
+        assert_eq!(tools, ["a", "b"]);
     }
     #[test]
     fn streams_from_local_http_server() {

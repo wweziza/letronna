@@ -660,30 +660,54 @@ impl Render for Chat {
         } else if conversation.messages.is_empty() && !streaming_here {
             self.empty_state(cx).into_any_element()
         } else {
-            let mut rows: Vec<AnyElement> = Vec::new();
+            // One turn per prompt, like Claude Code: the user's message, then
+            // everything the model did in reply under a single label.
+            let mut turns: Vec<Vec<AnyElement>> = Vec::new();
+            let mut assistant_turn = false;
             for (i, m) in conversation.messages.iter().enumerate() {
-                rows.push(self.message_row(i, m, false, window, cx).into_any_element());
-            }
-            if streaming_here && self.pending.is_none() {
-                let live = Message {
-                    role: "assistant".into(),
-                    content: self.partial.clone(),
-                    model: self.store.model.clone(),
-                    reasoning: self.partial_reasoning.clone(),
-                    tokens: self.live_tokens,
-                    per_second: self.live_per_second,
-                    ..Default::default()
-                };
-                rows.push(
-                    self.message_row(usize::MAX, &live, true, window, cx)
-                        .into_any_element(),
-                );
+                let is_user = m.role == "user";
+                if is_user || !assistant_turn {
+                    turns.push(Vec::new());
+                }
+                let labeled = is_user || !assistant_turn;
+                assistant_turn = !is_user;
+                turns
+                    .last_mut()
+                    .unwrap()
+                    .push(self.message_row(i, m, labeled, false, window, cx));
             }
             if streaming_here {
+                if !assistant_turn {
+                    turns.push(Vec::new());
+                }
+                let turn = turns.last_mut().unwrap();
+                if self.pending.is_none() {
+                    let live = Message {
+                        role: "assistant".into(),
+                        content: self.partial.clone(),
+                        model: self.store.model.clone(),
+                        reasoning: self.partial_reasoning.clone(),
+                        tokens: self.live_tokens,
+                        per_second: self.live_per_second,
+                        ..Default::default()
+                    };
+                    turn.push(self.message_row(
+                        usize::MAX,
+                        &live,
+                        !assistant_turn,
+                        true,
+                        window,
+                        cx,
+                    ));
+                }
                 if let Some(card) = self.approval_card(cx) {
-                    rows.push(card);
+                    turn.push(card);
                 }
             }
+            let rows: Vec<AnyElement> = turns
+                .into_iter()
+                .map(|turn| v_flex().w_full().gap_3().children(turn).into_any_element())
+                .collect();
             // The scrollbar must sit outside the scrolling element, or it
             // scrolls away with the content.
             div()
