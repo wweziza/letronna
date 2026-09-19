@@ -19,11 +19,11 @@ use windows_sys::Win32::UI::WindowsAndMessaging::GetClientRect;
 
 /// How much the snapshot is shrunk before blurring. The GPU smooths it back up,
 /// which does most of the blurring for free and keeps the CPU work tiny.
-const SHRINK: u32 = 10;
+const SHRINK: u32 = 4;
 /// Box-blur passes over the shrunk image. Three approximates a gaussian.
-const PASSES: usize = 3;
+const PASSES: usize = 2;
 /// Blur radius in shrunk pixels.
-const RADIUS: i32 = 2;
+const RADIUS: i32 = 1;
 
 /// Capture the window and return a blurred copy, or `None` if it cannot be read.
 pub(crate) fn capture(window: &Window) -> Option<Arc<RenderImage>> {
@@ -106,7 +106,7 @@ unsafe fn read_pixels(hwnd: *mut core::ffi::c_void) -> Option<(u32, u32, Vec<u8>
 fn lift(pixels: &mut [u8]) {
     for chunk in pixels.chunks_exact_mut(4) {
         for c in chunk.iter_mut().take(3) {
-            *c = ((*c as f32 * 1.55) + 14.).min(255.) as u8;
+            *c = ((*c as f32 * 1.18) + 6.).min(255.) as u8;
         }
     }
 }
