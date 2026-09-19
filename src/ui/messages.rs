@@ -65,7 +65,7 @@ impl Chat {
         };
         v_flex()
             .w_full()
-            .gap_1p5()
+            .gap_2p5()
             .child(
                 h_flex()
                     .items_center()
