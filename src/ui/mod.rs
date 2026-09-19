@@ -1,3 +1,4 @@
+pub(crate) mod approval;
 pub(crate) mod chrome;
 pub(crate) mod composer;
 pub(crate) mod messages;

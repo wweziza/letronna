@@ -457,8 +457,52 @@ fn privacy_page(chat: &Entity<Chat>, presence: &Entity<String>, cx: &App) -> Div
                 }),
         );
 
+    let skip = chat.read(cx).store.skip_approvals;
+    let approvals = h_flex()
+        .items_center()
+        .justify_between()
+        .px_3()
+        .py_2p5()
+        .rounded(cx.theme().radius)
+        .bg(cx.theme().secondary.opacity(0.3))
+        .child(
+            v_flex()
+                .gap_0p5()
+                .child(div().text_sm().child("Skip tool approvals"))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(
+                            "Let the agent write files and run commands without asking each time.",
+                        ),
+                ),
+        )
+        .child(
+            div().cursor_pointer().child(
+                gpui_component::switch::Switch::new("skip-approvals")
+                    .checked(skip)
+                    .on_click({
+                        let chat = chat.clone();
+                        move |_, _, cx| {
+                            chat.update(cx, |this, cx| {
+                                this.store.skip_approvals = !skip;
+                                this.save();
+                                cx.notify();
+                            })
+                        }
+                    }),
+            ),
+        );
+
     v_flex()
         .gap_4()
+        .child(heading(
+            "Agent",
+            "Write and command tools ask before they act. Turn that off only for folders you trust.",
+            cx,
+        ))
+        .child(approvals)
         .child(heading(
             "Discord Rich Presence",
             "What Letronna shares with Discord. The integration is turned on or off in the Plugins tab.",

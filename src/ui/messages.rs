@@ -147,6 +147,8 @@ impl Chat {
         let content = message.content.clone();
         let (status, color) = if message.is_error {
             (message.content.clone(), cx.theme().danger)
+        } else if message.name == crate::core::tools::ASK_USER {
+            (format!("→ {}", message.content), cx.theme().foreground)
         } else {
             (format!("{lines} lines"), cx.theme().muted_foreground)
         };

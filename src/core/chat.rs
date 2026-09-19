@@ -143,12 +143,10 @@ fn body(connection: &Connection, messages: &[Message]) -> Value {
     let mut system =
         String::from("You are Letronna, a personal assistant. Be clear, concise, and honest.");
     if connection.tools {
-        system.push_str(" You have read-only tools for the user's files; use them when a question is about their project instead of guessing.");
+        system.push_str(" You have tools to read, search, write and edit files and to run commands in the user's project; use them instead of guessing. Writes and commands are shown to the user for approval; a denial is final for that action. Ask with ask_user when a decision is the user's to make, such as a project name. After changing code, verify it (build, test, or run) before reporting done.");
         match &connection.workspace {
-            Some(w) => system.push_str(&format!(" The workspace is `{}`.", w.display())),
-            None => {
-                system.push_str(" No workspace is attached; paths resolve under the home folder.")
-            }
+            Some(w) => system.push_str(&format!(" The project folder is `{}`.", w.display())),
+            None => system.push_str(" No project folder is attached: you can only read under the home folder. Ask the user to attach one before writing or running anything."),
         }
     } else {
         system.push_str(" You have no tools or filesystem access on this gateway.");
@@ -722,7 +720,7 @@ mod tests {
             },
             &[],
         );
-        assert_eq!(tools["tools"].as_array().unwrap().len(), 3);
+        assert_eq!(tools["tools"].as_array().unwrap().len(), 7);
     }
     #[test]
     fn streams_from_local_http_server() {

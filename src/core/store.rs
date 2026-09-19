@@ -26,6 +26,9 @@ pub(crate) struct Store {
     pub(crate) gateway: String,
     #[serde(default)]
     pub(crate) presence: String,
+    /// Run write and command tools without asking.
+    #[serde(default)]
+    pub(crate) skip_approvals: bool,
 }
 
 impl Store {

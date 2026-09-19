@@ -16,6 +16,23 @@ actions!(letronna, [NewSession]);
 /// enough that a looping model stops on its own.
 const MAX_ROUNDS: usize = 25;
 
+/// Tool calls waiting to run for the current turn. The front one is either
+/// running or waiting on the approval card.
+pub(crate) struct Pending {
+    pub(crate) calls: std::collections::VecDeque<backend::ToolCall>,
+    pub(crate) done: Vec<Message>,
+    pub(crate) connection: Connection,
+}
+
+pub(crate) enum Verdict {
+    Allow {
+        remember: bool,
+    },
+    Deny,
+    /// The reply to an `ask_user` question.
+    Answer(String),
+}
+
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum Page {
     Chat,
@@ -82,6 +99,11 @@ pub(crate) struct Chat {
     pub(crate) pending_calls: Vec<backend::ToolCall>,
     /// Tool rounds in the current send, capped by `MAX_ROUNDS`.
     pub(crate) rounds: usize,
+    pub(crate) pending: Option<Pending>,
+    /// Tools the user allowed for the rest of this run of the app.
+    pub(crate) session_allow: std::collections::HashSet<String>,
+    /// Text field on the `ask_user` card.
+    pub(crate) answer: Entity<InputState>,
     pub(crate) live_tokens: u64,
     pub(crate) live_per_second: f32,
     pub(crate) thinking_open: std::collections::HashSet<usize>,
@@ -151,6 +173,7 @@ impl Chat {
         let presence_pick = cx.new(|_| store.presence.clone());
         let settings_page = cx.new(|_| "Gateways");
         let rename = cx.new(|cx| InputState::new(window, cx).placeholder("Session name"));
+        let answer = cx.new(|cx| InputState::new(window, cx).placeholder("Your answer…"));
         let subscriptions = vec![
             cx.subscribe_in(&model_search, window, |_, _, _: &InputEvent, _, cx| {
                 cx.notify()
@@ -161,6 +184,11 @@ impl Chat {
                 }
             }),
             cx.subscribe_in(&search, window, |_, _, _: &InputEvent, _, cx| cx.notify()),
+            cx.subscribe_in(&answer, window, |this, _, event, window, cx| {
+                if matches!(event, InputEvent::PressEnter { .. }) {
+                    this.submit_answer(window, cx);
+                }
+            }),
         ];
         let mut this = Self {
             page: Page::Chat,
@@ -192,6 +220,9 @@ impl Chat {
             partial_reasoning: String::new(),
             pending_calls: Vec::new(),
             rounds: 0,
+            pending: None,
+            session_allow: std::collections::HashSet::new(),
+            answer,
             live_tokens: 0,
             live_per_second: 0.,
             thinking_open: std::collections::HashSet::new(),
@@ -450,59 +481,117 @@ impl Chat {
         .detach();
     }
 
-    /// Run the requested tools off the UI thread, record the results, then ask the model again.
+    /// Queue the requested tools. Each runs in turn; ones that need approval
+    /// wait for the card in the chat.
     fn run_tools(
         &mut self,
         calls: Vec<backend::ToolCall>,
         connection: Connection,
         cx: &mut Context<Self>,
     ) {
+        self.pending = Some(Pending {
+            calls: calls.into(),
+            done: Vec::new(),
+            connection,
+        });
+        self.advance_tools(cx);
+    }
+
+    /// Run the next queued call, or stop on one that needs the user.
+    pub(crate) fn advance_tools(&mut self, cx: &mut Context<Self>) {
+        let Some(pending) = self.pending.as_mut() else {
+            return;
+        };
+        let Some(call) = pending.calls.front().cloned() else {
+            let Pending {
+                done, connection, ..
+            } = self.pending.take().unwrap();
+            if let Some(ix) = self.streaming_id.and_then(|id| self.store.index_of(id)) {
+                self.store.conversations[ix].messages.extend(done);
+                self.save();
+                self.run_turn(connection, cx);
+            } else {
+                self.finish(cx);
+            }
+            return;
+        };
+        let gated = crate::core::tools::needs_approval(&call.name)
+            && (call.name == crate::core::tools::ASK_USER
+                || !(self.store.skip_approvals || self.session_allow.contains(&call.name)));
+        if gated {
+            cx.notify();
+            return;
+        }
+        self.execute_call(call, cx);
+    }
+
+    /// Run one call off the UI thread and continue the queue when it returns.
+    fn execute_call(&mut self, call: backend::ToolCall, cx: &mut Context<Self>) {
         let ctx = crate::core::tools::ToolContext {
-            workspace: connection.workspace.clone(),
+            workspace: self
+                .pending
+                .as_ref()
+                .and_then(|p| p.connection.workspace.clone()),
         };
         let (tx, rx) = async_channel::bounded(1);
         std::thread::spawn(move || {
-            let results: Vec<Message> = calls
-                .iter()
-                .map(|call| {
-                    let (content, is_error) =
-                        match crate::core::tools::run(&call.name, &call.arguments, &ctx) {
-                            Ok(out) => (out, false),
-                            Err(e) => (e, true),
-                        };
-                    Message {
-                        role: "tool".into(),
-                        content,
-                        tool_call_id: call.id.clone(),
-                        name: call.name.clone(),
-                        args: call.arguments.clone(),
-                        is_error,
-                        ..Default::default()
-                    }
-                })
-                .collect();
-            let _ = tx.send_blocking(results);
+            let _ = tx.send_blocking(crate::core::tools::run(&call.name, &call.arguments, &ctx));
         });
         cx.spawn(async move |this, cx| {
-            if let Ok(results) = rx.recv().await {
-                let _ = this.update(cx, |this, cx| {
-                    if let Some(ix) = this.streaming_id.and_then(|id| this.store.index_of(id)) {
-                        this.store.conversations[ix].messages.extend(results);
-                        this.save();
-                        this.run_turn(connection, cx);
-                    } else {
-                        this.finish(cx);
-                    }
-                });
+            if let Ok(result) = rx.recv().await {
+                let _ = this.update(cx, |this, cx| this.record_result(result, cx));
             }
         })
         .detach();
+    }
+
+    /// Pop the current call, store its result, move on.
+    pub(crate) fn record_result(&mut self, result: Result<String, String>, cx: &mut Context<Self>) {
+        let Some(pending) = self.pending.as_mut() else {
+            return;
+        };
+        let Some(call) = pending.calls.pop_front() else {
+            return;
+        };
+        let (content, is_error) = match result {
+            Ok(out) => (out, false),
+            Err(e) => (e, true),
+        };
+        pending.done.push(Message {
+            role: "tool".into(),
+            content,
+            tool_call_id: call.id,
+            name: call.name,
+            args: call.arguments,
+            is_error,
+            ..Default::default()
+        });
+        self.scroll.scroll_to_bottom();
+        self.advance_tools(cx);
+    }
+
+    /// The user answered the approval card.
+    pub(crate) fn resolve_call(&mut self, verdict: Verdict, cx: &mut Context<Self>) {
+        let Some(call) = self.pending.as_ref().and_then(|p| p.calls.front().cloned()) else {
+            return;
+        };
+        match verdict {
+            Verdict::Answer(text) => self.record_result(Ok(text), cx),
+            Verdict::Deny => self.record_result(Err(crate::core::tools::DECLINED.into()), cx),
+            Verdict::Allow { remember } => {
+                if remember {
+                    self.session_allow.insert(call.name.clone());
+                }
+                self.execute_call(call, cx);
+            }
+        }
     }
 
     fn finish(&mut self, cx: &mut Context<Self>) {
         self.busy = false;
         self.streaming_id = None;
         self.pending_calls.clear();
+        self.pending = None;
         plugins::emit(cx, plugins::AppEvent::ChatIdle);
         cx.notify();
     }
@@ -564,7 +653,7 @@ impl Render for Chat {
             for (i, m) in conversation.messages.iter().enumerate() {
                 rows.push(self.message_row(i, m, false, window, cx).into_any_element());
             }
-            if streaming_here {
+            if streaming_here && self.pending.is_none() {
                 let live = Message {
                     role: "assistant".into(),
                     content: self.partial.clone(),
@@ -578,6 +667,11 @@ impl Render for Chat {
                     self.message_row(usize::MAX, &live, true, window, cx)
                         .into_any_element(),
                 );
+            }
+            if streaming_here {
+                if let Some(card) = self.approval_card(cx) {
+                    rows.push(card);
+                }
             }
             div()
                 .id("messages")
