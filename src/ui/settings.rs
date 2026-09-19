@@ -111,9 +111,9 @@ impl Chat {
                 anim(),
                 move |el, delta| {
                     el.opacity(if closing {
-                        0.55 * (1. - delta)
+                        0.68 * (1. - delta)
                     } else {
-                        0.55 * delta
+                        0.68 * delta
                     })
                 },
             );
