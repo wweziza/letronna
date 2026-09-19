@@ -193,11 +193,8 @@ impl Chat {
             .when(open, |this| {
                 this.child(
                     div()
-                        .id(("tool-out", index))
                         .ml_2()
                         .pl_3()
-                        .max_h(px(320.))
-                        .overflow_y_scroll()
                         .border_l_2()
                         .border_color(cx.theme().border)
                         .text_xs()
@@ -205,7 +202,7 @@ impl Chat {
                         .line_height(px(18.))
                         .text_color(cx.theme().muted_foreground)
                         .whitespace_normal()
-                        .child(content),
+                        .child(crate::core::tools::clamp_lines(&content, 80)),
                 )
             })
     }

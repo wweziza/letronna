@@ -122,9 +122,6 @@ impl Chat {
             )
             .child(
                 div()
-                    .id("preview")
-                    .max_h(px(260.))
-                    .overflow_y_scroll()
                     .p_2()
                     .rounded(cx.theme().radius)
                     .bg(cx.theme().background)
@@ -132,7 +129,7 @@ impl Chat {
                     .font_family(MONO_FONT)
                     .line_height(px(18.))
                     .whitespace_normal()
-                    .child(preview),
+                    .child(tools::clamp_lines(&preview, 60)),
             )
             .child(
                 h_flex()

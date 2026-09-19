@@ -684,21 +684,28 @@ impl Render for Chat {
                     rows.push(card);
                 }
             }
+            // The scrollbar must sit outside the scrolling element, or it
+            // scrolls away with the content.
             div()
-                .id("messages")
+                .relative()
                 .flex_1()
                 .min_h_0()
-                .overflow_y_scroll()
-                .track_scroll(&self.scroll)
                 .child(
-                    v_flex()
-                        .w_full()
-                        .when(self.sidebar_open, |d| d.max_w(relative(0.82)))
-                        .mx_auto()
-                        .px_6()
-                        .py_6()
-                        .gap_6()
-                        .children(rows),
+                    div()
+                        .id("messages")
+                        .size_full()
+                        .overflow_y_scroll()
+                        .track_scroll(&self.scroll)
+                        .child(
+                            v_flex()
+                                .w_full()
+                                .when(self.sidebar_open, |d| d.max_w(relative(0.82)))
+                                .mx_auto()
+                                .px_6()
+                                .py_6()
+                                .gap_6()
+                                .children(rows),
+                        ),
                 )
                 .vertical_scrollbar(&self.scroll)
                 .into_any_element()

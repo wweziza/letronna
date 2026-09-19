@@ -101,6 +101,25 @@ pub fn run(name: &str, args: &str, ctx: &ToolContext) -> Result<String, String> 
     Ok(out)
 }
 
+/// The first `max` lines, with a note about the rest. Keeps cards and rows
+/// from needing their own scroll area inside the chat.
+pub fn clamp_lines(text: &str, max: usize) -> String {
+    let total = text.lines().count();
+    if total <= max {
+        return text.to_owned();
+    }
+    let mut out: String = text.lines().take(max).collect::<Vec<_>>().join(
+        "
+",
+    );
+    out.push_str(&format!(
+        "
+… {} more lines",
+        total - max
+    ));
+    out
+}
+
 /// The argument the UI shows next to a tool name.
 pub fn summary(name: &str, args: &str) -> String {
     let v: Value = serde_json::from_str(args).unwrap_or(Value::Null);
