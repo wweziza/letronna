@@ -17,7 +17,7 @@ impl Chat {
         } else {
             message.model.clone()
         };
-        let leading = px(23.);
+        let leading = px(26.);
         let cx_muted = cx.theme().muted_foreground;
         let body: AnyElement = if is_user {
             TextView::markdown(("md", index), message.content.clone(), window, cx)
