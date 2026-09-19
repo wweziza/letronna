@@ -104,7 +104,7 @@ impl Chat {
             .when(!is_user && (!message.reasoning.is_empty()), |this| {
                 this.child(self.thinking_block(index, message, streaming, window, cx))
             })
-            .child(body)
+            .child(div().pb_1().child(body))
             .when(!is_user && message.tokens > 0, |this| {
                 this.child(
                     div()

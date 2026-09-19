@@ -100,7 +100,7 @@ impl Chat {
             .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
                 if event.modifiers().shift {
                     this.store.conversations[index].pinned ^= true;
-                } else if !this.busy {
+                } else {
                     this.store.active = index;
                     this.error = None;
                     this.page = Page::Chat;

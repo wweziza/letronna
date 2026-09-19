@@ -70,6 +70,8 @@ pub(crate) struct Chat {
     pub(crate) gateway_error: Option<String>,
     pub(crate) busy: bool,
     pub(crate) partial: String,
+    /// The session id currently receiving a streamed reply, if any.
+    pub(crate) streaming_id: Option<u64>,
     pub(crate) partial_reasoning: String,
     pub(crate) live_tokens: u64,
     pub(crate) live_per_second: f32,
@@ -96,6 +98,7 @@ impl Chat {
                 ..Default::default()
             });
         }
+        store.assign_ids();
         store.active = store.active.min(store.conversations.len() - 1);
         if store.gateway.is_empty() {
             store.gateway = GATEWAYS[0].name.into();
@@ -175,6 +178,7 @@ impl Chat {
             rename,
             busy: false,
             partial: String::new(),
+            streaming_id: None,
             partial_reasoning: String::new(),
             live_tokens: 0,
             live_per_second: 0.,
@@ -265,10 +269,8 @@ impl Chat {
     }
 
     pub(crate) fn new_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.busy {
-            return;
-        }
         self.store.conversations.push(Conversation {
+            id: self.store.next_id(),
             title: "New session".into(),
             updated: backend::now(),
             ..Default::default()
@@ -321,10 +323,12 @@ impl Chat {
             content: prompt,
             ..Default::default()
         });
+        let target_id = conversation.id;
         let receiver = backend::start(connection, conversation.messages.clone());
         self.composer
             .update(cx, |input, cx| input.set_value("", window, cx));
         self.busy = true;
+        self.streaming_id = Some(target_id);
         self.page = Page::Chat;
         let convo_title = self.store.conversations[self.store.active].title.clone();
         plugins::emit(
@@ -364,19 +368,26 @@ impl Chat {
                                 match result {
                                     Ok(()) => {
                                         let model = this.store.model.clone();
-                                        let c = &mut this.store.conversations[this.store.active];
-                                        c.updated = backend::now();
                                         let reasoning = std::mem::take(&mut this.partial_reasoning);
                                         let tokens = this.live_tokens;
                                         let per_second = this.live_per_second;
-                                        c.messages.push(Message {
-                                            role: "assistant".into(),
-                                            content: std::mem::take(&mut this.partial),
-                                            model,
-                                            reasoning,
-                                            tokens,
-                                            per_second,
-                                        })
+                                        let content = std::mem::take(&mut this.partial);
+                                        // The session may have been switched or
+                                        // deleted while the reply streamed.
+                                        if let Some(ix) =
+                                            this.streaming_id.and_then(|id| this.store.index_of(id))
+                                        {
+                                            let c = &mut this.store.conversations[ix];
+                                            c.updated = backend::now();
+                                            c.messages.push(Message {
+                                                role: "assistant".into(),
+                                                content,
+                                                model,
+                                                reasoning,
+                                                tokens,
+                                                per_second,
+                                            });
+                                        }
                                     }
                                     Err(error) => {
                                         this.partial.clear();
@@ -384,6 +395,7 @@ impl Chat {
                                         this.error = Some(error);
                                     }
                                 }
+                                this.streaming_id = None;
                                 this.save();
                             }
                         }
@@ -447,17 +459,19 @@ impl Render for Chat {
         }
         let active = self.store.active;
         let conversation = &self.store.conversations[active];
+        // Only the session the reply was sent from shows the live row.
+        let streaming_here = self.busy && self.streaming_id == Some(conversation.id);
 
         let body: AnyElement = if self.page != Page::Chat {
             self.page_view(self.page, cx).into_any_element()
-        } else if conversation.messages.is_empty() && !self.busy {
+        } else if conversation.messages.is_empty() && !streaming_here {
             self.empty_state(cx).into_any_element()
         } else {
             let mut rows: Vec<AnyElement> = Vec::new();
             for (i, m) in conversation.messages.iter().enumerate() {
                 rows.push(self.message_row(i, m, false, window, cx).into_any_element());
             }
-            if self.busy {
+            if streaming_here {
                 let live = Message {
                     role: "assistant".into(),
                     content: self.partial.clone(),

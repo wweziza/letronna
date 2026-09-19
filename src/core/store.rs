@@ -2,6 +2,10 @@ use crate::prelude::*;
 
 #[derive(Default, Serialize, Deserialize)]
 pub(crate) struct Conversation {
+    /// Stable identity, so a streaming reply lands in the session it was sent
+    /// from even if the user switches or deletes sessions meanwhile.
+    #[serde(default)]
+    pub(crate) id: u64,
     pub(crate) title: String,
     pub(crate) messages: Vec<Message>,
     #[serde(default)]
@@ -19,6 +23,28 @@ pub(crate) struct Store {
     pub(crate) gateway: String,
     #[serde(default)]
     pub(crate) presence: String,
+}
+
+impl Store {
+    /// An id no existing session uses.
+    pub(crate) fn next_id(&self) -> u64 {
+        self.conversations.iter().map(|c| c.id).max().unwrap_or(0) + 1
+    }
+
+    /// Give every session an id. Older saves have none.
+    pub(crate) fn assign_ids(&mut self) {
+        let mut next = self.next_id();
+        for c in self.conversations.iter_mut() {
+            if c.id == 0 {
+                c.id = next;
+                next += 1;
+            }
+        }
+    }
+
+    pub(crate) fn index_of(&self, id: u64) -> Option<usize> {
+        self.conversations.iter().position(|c| c.id == id)
+    }
 }
 
 pub(crate) fn data_path() -> PathBuf {
