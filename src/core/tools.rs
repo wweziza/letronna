@@ -184,6 +184,15 @@ fn run_shell(command: &str, cwd: Option<&Path>) -> Result<String, String> {
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
     }
+    // Letronna is a GUI-subsystem app, so it owns no console. Without this,
+    // Windows hands the shell a brand new console window on every call and it
+    // flashes up over the chat.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
     let mut child = cmd
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

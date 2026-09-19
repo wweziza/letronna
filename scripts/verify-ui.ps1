@@ -1,4 +1,4 @@
-param([ValidateSet('capture','click','send','wheel','measure')][string]$Action='capture', [int]$X=0, [int]$Y=0, [string]$Text='', [string]$Name='window')
+param([ValidateSet('capture','screen','click','send','wheel','measure')][string]$Action='capture', [int]$X=0, [int]$Y=0, [string]$Text='', [string]$Name='window')
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName System.Drawing
 Add-Type @"
@@ -21,6 +21,17 @@ if ($Action -eq 'click') {
  [void][NativeAgentWindow]::PostMessage($handle,0x0200,[IntPtr]::Zero,$point)
  [void][NativeAgentWindow]::PostMessage($handle,0x0201,[IntPtr]1,$point)
  [void][NativeAgentWindow]::PostMessage($handle,0x0202,[IntPtr]::Zero,$point)
+} elseif ($Action -eq 'screen') {
+ # Whole desktop, to catch windows the app itself does not own (stray consoles).
+ Add-Type -AssemblyName System.Windows.Forms
+ $area = [Windows.Forms.SystemInformation]::VirtualScreen
+ $bitmap = New-Object Drawing.Bitmap($area.Width, $area.Height)
+ $graphics = [Drawing.Graphics]::FromImage($bitmap)
+ $graphics.CopyFromScreen($area.Location, [Drawing.Point]::Empty, $area.Size)
+ $destination = Join-Path $PSScriptRoot "..\artifacts\$Name.png"
+ $bitmap.Save($destination)
+ $graphics.Dispose(); $bitmap.Dispose()
+ [pscustomobject]@{Captured=$true;Path=[IO.Path]::GetFullPath($destination)}
 } elseif ($Action -eq 'wheel') {
  # $Text = number of notches; positive scrolls up. Needs screen coords: window origin + X/Y.
  $rect = New-Object NativeAgentWindow+RECT
