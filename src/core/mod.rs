@@ -4,3 +4,4 @@
 pub(crate) mod chat;
 pub(crate) mod gateway;
 pub(crate) mod store;
+pub(crate) mod tools;

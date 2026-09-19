@@ -137,6 +137,29 @@ impl Chat {
         .detach();
     }
 
+    /// Pick the project folder for the active session. Tools resolve paths here.
+    pub(crate) fn attach_workspace(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let receiver = cx.prompt_for_paths(PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: None,
+        });
+        let id = self.store.conversations[self.store.active].id;
+        cx.spawn_in(window, async move |this, cx| {
+            if let Ok(Ok(Some(paths))) = receiver.await {
+                let _ = this.update(cx, |this, cx| {
+                    if let Some(ix) = this.store.index_of(id) {
+                        this.store.conversations[ix].workspace = paths.into_iter().next();
+                        this.save();
+                        cx.notify();
+                    }
+                });
+            }
+        })
+        .detach();
+    }
+
     pub(crate) fn insert(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
         self.composer.update(cx, |input, cx| {
             let mut value = input.value().to_string();
@@ -166,10 +189,10 @@ impl Chat {
                             }),
                     )
                     .item(
-                        PopupMenuItem::new("Folder")
+                        PopupMenuItem::new("Project folder")
                             .icon(Icon::new(AppIcon::Folder))
                             .on_click(move |_, window, cx| {
-                                folder.update(cx, |this, cx| this.attach(true, window, cx))
+                                folder.update(cx, |this, cx| this.attach_workspace(window, cx))
                             }),
                     )
                     .item(

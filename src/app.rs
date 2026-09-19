@@ -12,6 +12,10 @@ pub(crate) const GREETINGS: &[&str] = &[
 
 actions!(letronna, [NewSession]);
 
+/// Tool rounds per user message. Enough for a real investigation, small
+/// enough that a looping model stops on its own.
+const MAX_ROUNDS: usize = 25;
+
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum Page {
     Chat,
@@ -74,6 +78,10 @@ pub(crate) struct Chat {
     /// The session id currently receiving a streamed reply, if any.
     pub(crate) streaming_id: Option<u64>,
     pub(crate) partial_reasoning: String,
+    /// Tool calls the current turn asked for, applied when it finishes.
+    pub(crate) pending_calls: Vec<backend::ToolCall>,
+    /// Tool rounds in the current send, capped by `MAX_ROUNDS`.
+    pub(crate) rounds: usize,
     pub(crate) live_tokens: u64,
     pub(crate) live_per_second: f32,
     pub(crate) thinking_open: std::collections::HashSet<usize>,
@@ -182,6 +190,8 @@ impl Chat {
             partial: String::new(),
             streaming_id: None,
             partial_reasoning: String::new(),
+            pending_calls: Vec::new(),
+            rounds: 0,
             live_tokens: 0,
             live_per_second: 0.,
             thinking_open: std::collections::HashSet::new(),
@@ -271,10 +281,15 @@ impl Chat {
     }
 
     pub(crate) fn new_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // A new session usually continues on the same project.
+        let workspace = self.store.conversations[self.store.active]
+            .workspace
+            .clone();
         self.store.conversations.push(Conversation {
             id: self.store.next_id(),
             title: "New session".into(),
             updated: backend::now(),
+            workspace,
             ..Default::default()
         });
         self.store.active = self.store.conversations.len() - 1;
@@ -306,6 +321,8 @@ impl Chat {
             model: self.model.read(cx).value().to_string(),
             key: self.key.read(cx).value().to_string(),
             guest: self.store.gateway == GATEWAYS[0].name,
+            tools: self.store.gateway != GATEWAYS[0].name,
+            workspace: None,
         };
         if let Err(error) = backend::validate(&connection) {
             self.error = Some(error);
@@ -326,11 +343,11 @@ impl Chat {
             ..Default::default()
         });
         let target_id = conversation.id;
-        let receiver = backend::start(connection, conversation.messages.clone());
         self.composer
             .update(cx, |input, cx| input.set_value("", window, cx));
         self.busy = true;
         self.streaming_id = Some(target_id);
+        self.rounds = 0;
         self.page = Page::Chat;
         let convo_title = self.store.conversations[self.store.active].title.clone();
         plugins::emit(
@@ -340,13 +357,28 @@ impl Chat {
                 title: convo_title,
             },
         );
+        self.error = None;
+        self.save();
+        self.run_turn(connection, cx);
+    }
+
+    /// One model call. If it ends in tool calls, run them and go again.
+    fn run_turn(&mut self, mut connection: Connection, cx: &mut Context<Self>) {
+        let Some(ix) = self.streaming_id.and_then(|id| self.store.index_of(id)) else {
+            self.finish(cx);
+            return;
+        };
+        connection.workspace = self.store.conversations[ix].workspace.clone();
+        let receiver = backend::start(
+            connection.clone(),
+            self.store.conversations[ix].messages.clone(),
+        );
         self.partial.clear();
         self.partial_reasoning.clear();
+        self.pending_calls.clear();
         self.live_tokens = 0;
         self.live_per_second = 0.;
-        self.error = None;
         self.scroll.scroll_to_bottom();
-        self.save();
         cx.notify();
         cx.spawn(async move |this, cx| {
             while let Ok(event) = receiver.recv().await {
@@ -364,41 +396,43 @@ impl Chat {
                                 this.live_per_second = per_second;
                             }
                             Event::FreeRemaining(n) => this.free_remaining = Some(n),
-                            Event::Finished(result) => {
-                                this.busy = false;
-                                plugins::emit(cx, plugins::AppEvent::ChatIdle);
-                                match result {
-                                    Ok(()) => {
-                                        let model = this.store.model.clone();
-                                        let reasoning = std::mem::take(&mut this.partial_reasoning);
-                                        let tokens = this.live_tokens;
-                                        let per_second = this.live_per_second;
-                                        let content = std::mem::take(&mut this.partial);
-                                        // The session may have been switched or
-                                        // deleted while the reply streamed.
-                                        if let Some(ix) =
-                                            this.streaming_id.and_then(|id| this.store.index_of(id))
-                                        {
-                                            let c = &mut this.store.conversations[ix];
-                                            c.updated = backend::now();
-                                            c.messages.push(Message {
-                                                role: "assistant".into(),
-                                                content,
-                                                model,
-                                                reasoning,
-                                                tokens,
-                                                per_second,
-                                            });
-                                        }
-                                    }
-                                    Err(error) => {
-                                        this.partial.clear();
-                                        this.partial_reasoning.clear();
-                                        this.error = Some(error);
-                                    }
-                                }
-                                this.streaming_id = None;
+                            Event::ToolCalls(calls) => this.pending_calls = calls,
+                            Event::Finished(Err(error)) => {
+                                this.partial.clear();
+                                this.partial_reasoning.clear();
+                                this.error = Some(error);
+                                this.finish(cx);
+                            }
+                            Event::Finished(Ok(())) => {
+                                let calls = std::mem::take(&mut this.pending_calls);
+                                let reply = Message {
+                                    role: "assistant".into(),
+                                    content: std::mem::take(&mut this.partial),
+                                    model: this.store.model.clone(),
+                                    reasoning: std::mem::take(&mut this.partial_reasoning),
+                                    tokens: this.live_tokens,
+                                    per_second: this.live_per_second,
+                                    tool_calls: calls.clone(),
+                                    ..Default::default()
+                                };
+                                // The session may have been switched or
+                                // deleted while the reply streamed.
+                                let Some(ix) =
+                                    this.streaming_id.and_then(|id| this.store.index_of(id))
+                                else {
+                                    this.finish(cx);
+                                    return;
+                                };
+                                let c = &mut this.store.conversations[ix];
+                                c.updated = backend::now();
+                                c.messages.push(reply);
                                 this.save();
+                                if calls.is_empty() || this.rounds >= MAX_ROUNDS {
+                                    this.finish(cx);
+                                } else {
+                                    this.rounds += 1;
+                                    this.run_tools(calls, connection.clone(), cx);
+                                }
                             }
                         }
                         this.scroll.scroll_to_bottom();
@@ -414,6 +448,63 @@ impl Chat {
             }
         })
         .detach();
+    }
+
+    /// Run the requested tools off the UI thread, record the results, then ask the model again.
+    fn run_tools(
+        &mut self,
+        calls: Vec<backend::ToolCall>,
+        connection: Connection,
+        cx: &mut Context<Self>,
+    ) {
+        let ctx = crate::core::tools::ToolContext {
+            workspace: connection.workspace.clone(),
+        };
+        let (tx, rx) = async_channel::bounded(1);
+        std::thread::spawn(move || {
+            let results: Vec<Message> = calls
+                .iter()
+                .map(|call| {
+                    let (content, is_error) =
+                        match crate::core::tools::run(&call.name, &call.arguments, &ctx) {
+                            Ok(out) => (out, false),
+                            Err(e) => (e, true),
+                        };
+                    Message {
+                        role: "tool".into(),
+                        content,
+                        tool_call_id: call.id.clone(),
+                        name: call.name.clone(),
+                        args: call.arguments.clone(),
+                        is_error,
+                        ..Default::default()
+                    }
+                })
+                .collect();
+            let _ = tx.send_blocking(results);
+        });
+        cx.spawn(async move |this, cx| {
+            if let Ok(results) = rx.recv().await {
+                let _ = this.update(cx, |this, cx| {
+                    if let Some(ix) = this.streaming_id.and_then(|id| this.store.index_of(id)) {
+                        this.store.conversations[ix].messages.extend(results);
+                        this.save();
+                        this.run_turn(connection, cx);
+                    } else {
+                        this.finish(cx);
+                    }
+                });
+            }
+        })
+        .detach();
+    }
+
+    fn finish(&mut self, cx: &mut Context<Self>) {
+        self.busy = false;
+        self.streaming_id = None;
+        self.pending_calls.clear();
+        plugins::emit(cx, plugins::AppEvent::ChatIdle);
+        cx.notify();
     }
 }
 
@@ -481,6 +572,7 @@ impl Render for Chat {
                     reasoning: self.partial_reasoning.clone(),
                     tokens: self.live_tokens,
                     per_second: self.live_per_second,
+                    ..Default::default()
                 };
                 rows.push(
                     self.message_row(usize::MAX, &live, true, window, cx)

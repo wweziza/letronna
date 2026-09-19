@@ -17,6 +17,27 @@ pub struct Message {
     pub tokens: u64,
     #[serde(default)]
     pub per_second: f32,
+    /// Calls the assistant asked for in this turn.
+    #[serde(default)]
+    pub tool_calls: Vec<ToolCall>,
+    /// For `role: "tool"` messages: the call this result answers.
+    #[serde(default)]
+    pub tool_call_id: String,
+    #[serde(default)]
+    pub name: String,
+    /// For `role: "tool"`: the raw arguments, kept so the UI can show them.
+    #[serde(default)]
+    pub args: String,
+    #[serde(default)]
+    pub is_error: bool,
+}
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+pub struct ToolCall {
+    pub id: String,
+    pub name: String,
+    /// JSON object as sent by the model.
+    pub arguments: String,
 }
 
 pub fn now() -> u64 {
@@ -33,13 +54,22 @@ pub struct Connection {
     pub key: String,
     /// Use the AILE guest route (free catalog, cookie session) instead of the keyed API.
     pub guest: bool,
+    /// Advertise tools. Off for the guest route, which does not forward them.
+    pub tools: bool,
+    /// Folder the session works in, shown to the model.
+    pub workspace: Option<std::path::PathBuf>,
 }
 
 pub enum Event {
     Delta(String),
     Reasoning(String),
-    Usage { completion: u64, per_second: f32 },
+    Usage {
+        completion: u64,
+        per_second: f32,
+    },
     FreeRemaining(u64),
+    /// Sent once, before `Finished`, when the model asked for tools.
+    ToolCalls(Vec<ToolCall>),
     Finished(Result<(), String>),
 }
 
@@ -110,21 +140,50 @@ fn body(connection: &Connection, messages: &[Message]) -> Value {
     while start < messages.len() && messages[start].role != "user" {
         start += 1;
     }
-    let mut context = vec![
-        json!({"role": "system", "content": "You are Letronna, a personal assistant. Be clear, concise, and honest. You can converse but have no tools or filesystem access in this app."}),
-    ];
-    context.extend(
-        messages[start..]
-            .iter()
-            .map(|m| json!({"role": m.role, "content": m.content})),
-    );
-    json!({
+    let mut system =
+        String::from("You are Letronna, a personal assistant. Be clear, concise, and honest.");
+    if connection.tools {
+        system.push_str(" You have read-only tools for the user's files; use them when a question is about their project instead of guessing.");
+        match &connection.workspace {
+            Some(w) => system.push_str(&format!(" The workspace is `{}`.", w.display())),
+            None => {
+                system.push_str(" No workspace is attached; paths resolve under the home folder.")
+            }
+        }
+    } else {
+        system.push_str(" You have no tools or filesystem access on this gateway.");
+    }
+    let mut context = vec![json!({"role": "system", "content": system})];
+    context.extend(messages[start..].iter().map(wire_message));
+    let mut body = json!({
         "model": wire_model(connection),
         "messages": context,
         "stream": true,
-        "max_tokens": 1024,
+        "max_tokens": 2048,
         "stream_options": {"include_usage": true}
-    })
+    });
+    if connection.tools {
+        body["tools"] = Value::Array(super::tools::specs());
+    }
+    body
+}
+
+fn wire_message(m: &Message) -> Value {
+    let mut v = json!({"role": m.role, "content": m.content});
+    if m.role == "tool" {
+        v["tool_call_id"] = m.tool_call_id.clone().into();
+    }
+    if !m.tool_calls.is_empty() {
+        v["tool_calls"] = m
+            .tool_calls
+            .iter()
+            .map(|c| {
+                json!({"id": c.id, "type": "function",
+                    "function": {"name": c.name, "arguments": c.arguments}})
+            })
+            .collect();
+    }
+    v
 }
 
 fn unwrap_response(value: &Value) -> Result<&Value, String> {
@@ -148,6 +207,21 @@ struct Chunk {
     content: Option<String>,
     reasoning: Option<String>,
     completion_tokens: Option<u64>,
+    /// Fragments of `(index, id, name, arguments)`; the stream assembles them.
+    tool_calls: Vec<(usize, String, String, String)>,
+}
+
+/// Merge streamed fragments into whole calls, ordered by index.
+fn merge_tool_calls(calls: &mut Vec<ToolCall>, chunk: &Chunk) {
+    for (index, id, name, arguments) in &chunk.tool_calls {
+        while calls.len() <= *index {
+            calls.push(ToolCall::default());
+        }
+        let call = &mut calls[*index];
+        call.id.push_str(id);
+        call.name.push_str(name);
+        call.arguments.push_str(arguments);
+    }
 }
 
 fn parse_event(data: &str) -> Result<Chunk, String> {
@@ -168,10 +242,29 @@ fn parse_event(data: &str) -> Result<Chunk, String> {
     let completion_tokens = inner
         .pointer("/usage/completion_tokens")
         .and_then(Value::as_u64);
+    let tool_calls = delta
+        .and_then(|d| d["tool_calls"].as_array())
+        .map(|calls| {
+            calls
+                .iter()
+                .enumerate()
+                .map(|(i, c)| {
+                    let text = |v: &Value| v.as_str().unwrap_or_default().to_owned();
+                    (
+                        c["index"].as_u64().map(|n| n as usize).unwrap_or(i),
+                        text(&c["id"]),
+                        text(&c["function"]["name"]),
+                        text(&c["function"]["arguments"]),
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     Ok(Chunk {
         content,
         reasoning,
         completion_tokens,
+        tool_calls,
     })
 }
 
@@ -363,6 +456,7 @@ fn stream(
     let mut received = false;
     let mut complete = false;
     let mut completion_tokens = 0u64;
+    let mut calls: Vec<ToolCall> = Vec::new();
     let began = std::time::Instant::now();
     for line in BufReader::new(response).lines() {
         let line =
@@ -378,6 +472,7 @@ fn stream(
         if let Some(n) = chunk.completion_tokens {
             completion_tokens = n;
         }
+        merge_tool_calls(&mut calls, &chunk);
         if let Some(text) = chunk.reasoning {
             sender
                 .send_blocking(Event::Reasoning(text))
@@ -402,6 +497,13 @@ fn stream(
             "The provider closed the stream early or does not support SSE chat completions.".into(),
         );
     }
+    calls.retain(|c| !c.name.is_empty());
+    if !calls.is_empty() {
+        received = true;
+        sender
+            .send_blocking(Event::ToolCalls(calls))
+            .map_err(|_| "Chat closed.".to_owned())?;
+    }
     if !received {
         return Err("The model returned no text. Check model compatibility.".into());
     }
@@ -420,6 +522,8 @@ mod tests {
             model: "test-model".into(),
             key: String::new(),
             guest: false,
+            tools: false,
+            workspace: None,
         }
     }
     #[test]
@@ -467,6 +571,8 @@ mod tests {
             model: "aile-free/gpt-oss-20b".into(),
             key: String::new(),
             guest: true,
+            tools: false,
+            workspace: None,
         };
         assert_eq!(
             validate(&c).unwrap(),
@@ -492,6 +598,8 @@ mod tests {
                 model: "aile-free/gpt-oss-20b".into(),
                 key: String::new(),
                 guest: true,
+                tools: false,
+                workspace: None,
             },
             vec![Message {
                 role: "user".into(),
@@ -504,7 +612,7 @@ mod tests {
             match rx.recv_blocking().unwrap() {
                 Event::Delta(chunk) => text.push_str(&chunk),
                 Event::Reasoning(_) | Event::Usage { .. } => {}
-                Event::FreeRemaining(_) => {}
+                Event::FreeRemaining(_) | Event::ToolCalls(_) => {}
                 Event::Finished(result) => {
                     result.unwrap();
                     break;
@@ -513,6 +621,70 @@ mod tests {
         }
         assert!(!text.trim().is_empty());
         println!("AILE live reply: {text}");
+    }
+    #[test]
+    #[ignore = "Uses the saved AILE key and one marketplace model; run explicitly"]
+    fn live_tool_loop() {
+        let keys: Value =
+            serde_json::from_slice(&std::fs::read(data_dir().join("keys.json")).unwrap()).unwrap();
+        let connection = Connection {
+            endpoint: "https://api.aile.sh/v1".into(),
+            model: std::env::var("AGENT_MODEL").unwrap_or_else(|_| "gpt-4o-mini".into()),
+            key: keys["AILE"].as_str().unwrap().into(),
+            guest: false,
+            tools: true,
+            workspace: Some(std::env::current_dir().unwrap()),
+        };
+        let ctx = super::super::tools::ToolContext {
+            workspace: connection.workspace.clone(),
+        };
+        let mut messages = vec![Message {
+            role: "user".into(),
+            content: "What is the package name in Cargo.toml? Read the file, then answer with just the name.".into(),
+            ..Default::default()
+        }];
+        for round in 0..5 {
+            let rx = start(connection.clone(), messages.clone());
+            let mut reply = Message {
+                role: "assistant".into(),
+                ..Default::default()
+            };
+            loop {
+                match rx.recv_blocking().unwrap() {
+                    Event::Delta(t) => reply.content.push_str(&t),
+                    Event::ToolCalls(calls) => reply.tool_calls = calls,
+                    Event::Finished(r) => {
+                        r.unwrap();
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+            let calls = reply.tool_calls.clone();
+            messages.push(reply);
+            if calls.is_empty() {
+                println!(
+                    "answer after {round} tool rounds: {}",
+                    messages.last().unwrap().content
+                );
+                assert!(messages.last().unwrap().content.contains("letronna"));
+                assert!(round > 0, "model answered without reading the file");
+                return;
+            }
+            for call in calls {
+                println!("tool {} {}", call.name, call.arguments);
+                let content = super::super::tools::run(&call.name, &call.arguments, &ctx)
+                    .unwrap_or_else(|e| e);
+                messages.push(Message {
+                    role: "tool".into(),
+                    content,
+                    tool_call_id: call.id,
+                    name: call.name,
+                    ..Default::default()
+                });
+            }
+        }
+        panic!("no final answer");
     }
     #[test]
     fn context_keeps_complete_recent_turns() {
@@ -528,6 +700,29 @@ mod tests {
         assert_eq!(context.len(), 21);
         assert_eq!(context[1]["role"], "user");
         assert_eq!(context.last().unwrap()["content"], "message 29");
+    }
+    #[test]
+    fn assembles_streamed_tool_calls() {
+        let mut calls = Vec::new();
+        for data in [
+            r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"read_file","arguments":""}}]}}]}"#,
+            r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"path\":"}}]}}]}"#,
+            r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"a.rs\"}"}}]}}]}"#,
+        ] {
+            merge_tool_calls(&mut calls, &parse_event(data).unwrap());
+        }
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].id, "c1");
+        assert_eq!(calls[0].name, "read_file");
+        assert_eq!(calls[0].arguments, r#"{"path":"a.rs"}"#);
+        let tools = body(
+            &Connection {
+                tools: true,
+                ..connection()
+            },
+            &[],
+        );
+        assert_eq!(tools["tools"].as_array().unwrap().len(), 3);
     }
     #[test]
     fn streams_from_local_http_server() {

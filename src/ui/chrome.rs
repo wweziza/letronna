@@ -116,6 +116,33 @@ impl Chat {
             .on_click(cx.listener(|this, _, window, cx| this.open_settings(window, cx)))
     }
 
+    /// The session's project folder. Click to pick or change it.
+    fn workspace_chip(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let workspace = &self.store.conversations[self.store.active].workspace;
+        let (name, tip) = match workspace {
+            Some(p) => (
+                p.file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| p.display().to_string()),
+                p.display().to_string(),
+            ),
+            None => ("No project".into(), "Attach a project folder".into()),
+        };
+        Button::new("workspace")
+            .ghost()
+            .xsmall()
+            .text_color(cx.theme().muted_foreground)
+            .tooltip(tip)
+            .child(
+                h_flex()
+                    .gap_1()
+                    .items_center()
+                    .child(Icon::new(AppIcon::Folder).size_3())
+                    .child(name),
+            )
+            .on_click(cx.listener(|this, _, window, cx| this.attach_workspace(window, cx)))
+    }
+
     pub(crate) fn status_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         h_flex()
             .h(px(20.))
@@ -125,6 +152,7 @@ impl Chat {
             .text_xs()
             .text_color(cx.theme().muted_foreground)
             .child(self.gateway_chip(cx))
+            .child(self.workspace_chip(cx))
             .when_some(self.free_remaining, |this, n| {
                 this.child(format!("{n} free replies left"))
             })

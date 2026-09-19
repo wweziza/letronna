@@ -12,6 +12,9 @@ pub(crate) struct Conversation {
     pub(crate) updated: u64,
     #[serde(default)]
     pub(crate) pinned: bool,
+    /// Project folder attached to this session, if any.
+    #[serde(default)]
+    pub(crate) workspace: Option<PathBuf>,
 }
 #[derive(Default, Serialize, Deserialize)]
 pub(crate) struct Store {

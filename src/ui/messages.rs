@@ -8,7 +8,10 @@ impl Chat {
         streaming: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) -> AnyElement {
+        if message.role == "tool" {
+            return self.tool_row(index, message, cx).into_any_element();
+        }
         let is_user = message.role == "user";
         let label: String = if is_user {
             "You".into()
@@ -25,6 +28,9 @@ impl Chat {
                 .selectable(true)
                 .line_height(leading)
                 .into_any_element()
+        } else if message.content.is_empty() && !message.tool_calls.is_empty() {
+            // A turn that only asked for tools; the tool rows below say what happened.
+            div().into_any_element()
         } else if message.content.is_empty() {
             h_flex()
                 .gap_2()
@@ -105,23 +111,101 @@ impl Chat {
                 this.child(self.thinking_block(index, message, streaming, window, cx))
             })
             .child(div().pb_1().child(body))
-            .when(!is_user && message.tokens > 0, |this| {
-                this.child(
-                    div()
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground)
-                        .child(format!(
-                            "{} tokens · {:.1} tok/s",
-                            message.tokens, message.per_second
-                        )),
-                )
-            })
+            .when(
+                !is_user && message.tokens > 0 && !message.content.is_empty(),
+                |this| {
+                    this.child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(format!(
+                                "{} tokens · {:.1} tok/s",
+                                message.tokens, message.per_second
+                            )),
+                    )
+                },
+            )
             .with_animation(
                 ("appear", index),
                 Animation::new(std::time::Duration::from_millis(260))
                     .with_easing(gpui::ease_out_quint()),
                 |el, delta| el.opacity(delta).mt(px(10. * (1. - delta))),
             )
+            .into_any_element()
+    }
+
+    /// A tool result: one quiet line, click to see the output.
+    fn tool_row(
+        &self,
+        index: usize,
+        message: &Message,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let open = self.thinking_open.contains(&index);
+        let summary = crate::core::tools::summary(&message.name, &message.args);
+        let lines = message.content.lines().count();
+        let content = message.content.clone();
+        let (status, color) = if message.is_error {
+            (message.content.clone(), cx.theme().danger)
+        } else {
+            (format!("{lines} lines"), cx.theme().muted_foreground)
+        };
+        v_flex()
+            .w_full()
+            .gap_1()
+            .child(
+                h_flex()
+                    .id(("tool", index))
+                    .h(px(26.))
+                    .px_2()
+                    .gap_1p5()
+                    .items_center()
+                    .rounded(cx.theme().radius)
+                    .cursor_pointer()
+                    .text_xs()
+                    .font_family(HEADING_FONT)
+                    .text_color(cx.theme().muted_foreground)
+                    .hover(|s| s.bg(cx.theme().secondary.opacity(0.5)))
+                    .child(
+                        Icon::new(if open {
+                            IconName::ChevronDown
+                        } else {
+                            IconName::ChevronRight
+                        })
+                        .size_3(),
+                    )
+                    .child(
+                        div()
+                            .text_color(cx.theme().foreground)
+                            .child(message.name.clone()),
+                    )
+                    .child(div().font_family(MONO_FONT).child(summary))
+                    .child(div().text_color(color).truncate().child(status))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if !this.thinking_open.remove(&index) {
+                            this.thinking_open.insert(index);
+                        }
+                        cx.notify();
+                    })),
+            )
+            .when(open, |this| {
+                this.child(
+                    div()
+                        .id(("tool-out", index))
+                        .ml_2()
+                        .pl_3()
+                        .max_h(px(320.))
+                        .overflow_y_scroll()
+                        .border_l_2()
+                        .border_color(cx.theme().border)
+                        .text_xs()
+                        .font_family(MONO_FONT)
+                        .line_height(px(18.))
+                        .text_color(cx.theme().muted_foreground)
+                        .whitespace_normal()
+                        .child(content),
+                )
+            })
     }
 
     fn thinking_block(

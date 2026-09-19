@@ -3,6 +3,10 @@ use crate::prelude::*;
 pub(crate) const HEADING_FONT: &str = "Segoe UI Variable Display";
 pub(crate) const BODY_FONT: &str = "Segoe UI Variable Text";
 pub(crate) const WORDMARK_FONT: &str = "Georgia";
+#[cfg(windows)]
+pub(crate) const MONO_FONT: &str = "Cascadia Mono";
+#[cfg(not(windows))]
+pub(crate) const MONO_FONT: &str = "monospace";
 
 pub(crate) fn apply(cx: &mut App) {
     Theme::change(ThemeMode::Dark, None, cx);
