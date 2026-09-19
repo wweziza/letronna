@@ -223,7 +223,9 @@ impl Chat {
                 cx,
             )
             .into_any_element(),
-            "Privacy" => privacy_page(&chat, &presence, cx).into_any_element(),
+            "Privacy" => {
+                privacy_page(&chat, &presence, self.store.skip_approvals, cx).into_any_element()
+            }
             "Plugins" => plugins_page(&chat, cx).into_any_element(),
             "About" => about_page(cx).into_any_element(),
             _ => gateway_page(&pick, &endpoint, &key, &chat, cx).into_any_element(),
@@ -380,7 +382,7 @@ fn label(text: &'static str, cx: &App) -> Div {
         .child(text)
 }
 
-fn privacy_page(chat: &Entity<Chat>, presence: &Entity<String>, cx: &App) -> Div {
+fn privacy_page(chat: &Entity<Chat>, presence: &Entity<String>, skip: bool, cx: &App) -> Div {
     let current = plugins::PresenceMode::from_str(presence.read(cx));
     let enabled = plugins::list(cx)
         .iter()
@@ -457,7 +459,6 @@ fn privacy_page(chat: &Entity<Chat>, presence: &Entity<String>, cx: &App) -> Div
                 }),
         );
 
-    let skip = chat.read(cx).store.skip_approvals;
     let approvals = h_flex()
         .items_center()
         .justify_between()
