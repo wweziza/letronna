@@ -58,7 +58,14 @@ impl Chat {
         self.close_settings(cx);
     }
 
-    pub(crate) fn open_settings(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Snapshot the window before the overlay covers it.
+        #[cfg(windows)]
+        {
+            self.settings_backdrop = crate::platform::backdrop::capture(window);
+        }
+        #[cfg(not(windows))]
+        let _ = window;
         self.settings_open = true;
         self.settings_closing = false;
         cx.notify();
@@ -77,6 +84,7 @@ impl Chat {
             let _ = this.update(cx, |this, cx| {
                 this.settings_open = false;
                 this.settings_closing = false;
+                this.settings_backdrop = None;
                 cx.notify();
             });
         })
@@ -97,6 +105,17 @@ impl Chat {
             Animation::new(std::time::Duration::from_millis(180))
                 .with_easing(gpui::ease_out_quint())
         };
+        let blur = self.settings_backdrop.clone().map(|image| {
+            img(image)
+                .absolute()
+                .size_full()
+                .object_fit(ObjectFit::Fill)
+                .with_animation(
+                    if closing { "blur-out" } else { "blur-in" },
+                    anim(),
+                    move |el, delta| el.opacity(if closing { 1. - delta } else { delta }),
+                )
+        });
         let scrim = div()
             .id("settings-scrim")
             .absolute()
@@ -111,9 +130,9 @@ impl Chat {
                 anim(),
                 move |el, delta| {
                     el.opacity(if closing {
-                        0.68 * (1. - delta)
+                        0.18 * (1. - delta)
                     } else {
-                        0.68 * delta
+                        0.18 * delta
                     })
                 },
             );
@@ -135,6 +154,7 @@ impl Chat {
                 .flex()
                 .items_center()
                 .justify_center()
+                .children(blur)
                 .child(scrim)
                 .child(panel)
                 .into_any_element(),

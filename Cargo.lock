@@ -3476,6 +3476,7 @@ dependencies = [
  "embed-resource",
  "gpui",
  "gpui-component",
+ "image",
  "raw-window-handle",
  "reqwest",
  "serde",

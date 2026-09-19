@@ -101,6 +101,7 @@ src/platform/       Windows-only OS integration (cfg(windows))
   install.rs        first-run registration and --uninstall
   tray.rs           notification-area icon and menu
   window.rs         Win32 window helpers
+  backdrop.rs       captures and blurs the window for modal backdrops
 
 assets/             icon, avatar, SVG icons
 scripts/            icon sync, window capture for UI checks
