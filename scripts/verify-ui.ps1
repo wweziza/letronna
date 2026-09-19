@@ -1,4 +1,4 @@
-param([ValidateSet('capture','click','send','measure')][string]$Action='capture', [int]$X=0, [int]$Y=0, [string]$Text='', [string]$Name='window')
+param([ValidateSet('capture','click','send','wheel','measure')][string]$Action='capture', [int]$X=0, [int]$Y=0, [string]$Text='', [string]$Name='window')
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName System.Drawing
 Add-Type @"
@@ -21,6 +21,17 @@ if ($Action -eq 'click') {
  [void][NativeAgentWindow]::PostMessage($handle,0x0200,[IntPtr]::Zero,$point)
  [void][NativeAgentWindow]::PostMessage($handle,0x0201,[IntPtr]1,$point)
  [void][NativeAgentWindow]::PostMessage($handle,0x0202,[IntPtr]::Zero,$point)
+} elseif ($Action -eq 'wheel') {
+ # $Text = number of notches; positive scrolls up. Needs screen coords: window origin + X/Y.
+ $rect = New-Object NativeAgentWindow+RECT
+ [void][NativeAgentWindow]::GetWindowRect($handle,[ref]$rect)
+ $notches = [int]$Text
+ $delta = [int]([math]::Sign($notches) * 120)
+ $point = [IntPtr]((($rect.Top + $Y) -shl 16) -bor (($rect.Left + $X) -band 65535))
+ for ($i = 0; $i -lt [math]::Abs($notches); $i++) {
+  [void][NativeAgentWindow]::PostMessage($handle,0x020A,[IntPtr]($delta -shl 16),$point)
+  Start-Sleep -Milliseconds 60
+ }
 } elseif ($Action -eq 'send') {
  foreach ($character in $Text.ToCharArray()) { [void][NativeAgentWindow]::PostMessage($handle,0x0102,[IntPtr][int]$character,[IntPtr]1) }
  [void][NativeAgentWindow]::PostMessage($handle,0x0100,[IntPtr]13,[IntPtr]1)

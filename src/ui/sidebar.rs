@@ -104,6 +104,8 @@ impl Chat {
                     this.store.active = index;
                     this.error = None;
                     this.page = Page::Chat;
+                    // The handle is shared across sessions; start at the latest message.
+                    this.scroll.scroll_to_bottom();
                 }
                 this.save();
                 cx.notify();

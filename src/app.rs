@@ -390,6 +390,7 @@ impl Chat {
         );
         self.error = None;
         self.save();
+        self.scroll.scroll_to_bottom();
         self.run_turn(connection, cx);
     }
 
@@ -409,7 +410,7 @@ impl Chat {
         self.pending_calls.clear();
         self.live_tokens = 0;
         self.live_per_second = 0.;
-        self.scroll.scroll_to_bottom();
+        self.follow();
         cx.notify();
         cx.spawn(async move |this, cx| {
             while let Ok(event) = receiver.recv().await {
@@ -466,7 +467,7 @@ impl Chat {
                                 }
                             }
                         }
-                        this.scroll.scroll_to_bottom();
+                        this.follow();
                         cx.notify();
                     })
                     .is_err()
@@ -566,7 +567,7 @@ impl Chat {
             is_error,
             ..Default::default()
         });
-        self.scroll.scroll_to_bottom();
+        self.follow();
         self.advance_tools(cx);
     }
 
@@ -584,6 +585,16 @@ impl Chat {
                 }
                 self.execute_call(call, cx);
             }
+        }
+    }
+
+    /// Follow the stream only while the user is already at the bottom, so
+    /// scrolling up to reread does not snap back on every token.
+    pub(crate) fn follow(&self) {
+        let slack = px(48.);
+        let gap = self.scroll.max_offset().height + self.scroll.offset().y;
+        if gap <= slack {
+            self.scroll.scroll_to_bottom();
         }
     }
 
