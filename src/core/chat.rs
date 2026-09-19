@@ -125,20 +125,37 @@ pub fn validate(connection: &Connection) -> Result<String, String> {
     })
 }
 
+/// Character budget for the whole conversation window.
+const CONTEXT_CHARS: usize = 24_000;
+/// A single tool result can be far larger than anything the model needs to
+/// read. The chat keeps the whole thing; the request gets the ends.
+const MAX_TOOL_CHARS: usize = 8_000;
+
+fn budget(messages: &[Message]) -> usize {
+    messages
+        .iter()
+        .map(|m| m.content.chars().count().min(MAX_TOOL_CHARS))
+        .sum()
+}
+
 fn body(connection: &Connection, messages: &[Message]) -> Value {
-    // Bound context by characters and complete user turns; always retain the latest prompt.
-    let mut start = messages.len();
-    let mut chars = 0;
-    while start > 0 && messages.len() - start < 20 {
-        let size = messages[start - 1].content.chars().count();
-        if chars + size > 24_000 {
+    // Walk back over whole user turns until the budget runs out. The latest
+    // turn always goes in, whatever its size: dropping it (one huge tool
+    // result can exceed the budget by itself) would leave the model with no
+    // prompt at all, and it answers by introducing itself.
+    let last_user = messages.iter().rposition(|m| m.role == "user").unwrap_or(0);
+    let mut start = last_user;
+    let mut chars = budget(&messages[last_user..]);
+    for i in (0..last_user).rev() {
+        if messages[i].role != "user" {
+            continue;
+        }
+        let size = budget(&messages[i..start]);
+        if chars + size > CONTEXT_CHARS || messages.len() - i > 40 {
             break;
         }
         chars += size;
-        start -= 1;
-    }
-    while start < messages.len() && messages[start].role != "user" {
-        start += 1;
+        start = i;
     }
     let mut system =
         String::from("You are Letronna, a personal assistant. Be clear, concise, and honest.");
@@ -172,7 +189,9 @@ fn body(connection: &Connection, messages: &[Message]) -> Value {
         "model": wire_model(connection),
         "messages": context,
         "stream": true,
-        "max_tokens": 2048,
+        // Writing a file puts the whole body in one tool call, so a small cap
+        // truncates the arguments mid-JSON.
+        "max_tokens": 8192,
         "stream_options": {"include_usage": true}
     });
     if connection.tools {
@@ -181,8 +200,27 @@ fn body(connection: &Connection, messages: &[Message]) -> Value {
     body
 }
 
+/// Keep both ends of an oversized tool result; the middle is rarely the point.
+fn trim(text: &str, max: usize) -> String {
+    if text.chars().count() <= max {
+        return text.to_owned();
+    }
+    let half = max / 2;
+    let head: String = text.chars().take(half).collect();
+    let tail: String = text
+        .chars()
+        .skip(text.chars().count().saturating_sub(half))
+        .collect();
+    format!("{head}\n… [middle trimmed] …\n{tail}")
+}
+
 fn wire_message(m: &Message) -> Value {
-    let mut v = json!({"role": m.role, "content": m.content});
+    let content = if m.role == "tool" {
+        trim(&m.content, MAX_TOOL_CHARS)
+    } else {
+        m.content.clone()
+    };
+    let mut v = json!({"role": m.role, "content": content});
     if m.role == "tool" {
         v["tool_call_id"] = m.tool_call_id.clone().into();
     }
@@ -710,9 +748,44 @@ mod tests {
             .collect();
         let payload = body(&connection(), &messages);
         let context = payload["messages"].as_array().unwrap();
-        assert_eq!(context.len(), 21);
+        assert_eq!(context.len(), 31);
         assert_eq!(context[1]["role"], "user");
         assert_eq!(context.last().unwrap()["content"], "message 29");
+    }
+    #[test]
+    fn huge_tool_result_keeps_the_prompt() {
+        // A tool result larger than the whole budget used to push the window
+        // past the end, leaving the model nothing but the system prompt, which
+        // it answered by introducing itself.
+        let messages = vec![
+            Message {
+                role: "user".into(),
+                content: "what is in the file?".into(),
+                ..Default::default()
+            },
+            Message {
+                role: "assistant".into(),
+                tool_calls: vec![ToolCall {
+                    id: "a".into(),
+                    name: "read_file".into(),
+                    arguments: "{}".into(),
+                }],
+                ..Default::default()
+            },
+            Message {
+                role: "tool".into(),
+                tool_call_id: "a".into(),
+                content: "x".repeat(CONTEXT_CHARS * 3),
+                ..Default::default()
+            },
+        ];
+        let payload = body(&connection(), &messages);
+        let context = payload["messages"].as_array().unwrap();
+        assert_eq!(context.len(), 4);
+        assert_eq!(context[1]["content"], "what is in the file?");
+        // The oversized result is trimmed rather than dropped.
+        let sent = context[3]["content"].as_str().unwrap().chars().count();
+        assert!(sent < MAX_TOOL_CHARS + 64, "{sent}");
     }
     #[test]
     fn assembles_streamed_tool_calls() {

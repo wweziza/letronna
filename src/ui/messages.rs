@@ -11,7 +11,7 @@ impl Chat {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         if message.role == "tool" {
-            return self.tool_row(index, message, cx).into_any_element();
+            return self.tool_row(index, message, window, cx).into_any_element();
         }
         let is_user = message.role == "user";
         let label: String = if is_user {
@@ -142,16 +142,21 @@ impl Chat {
         &self,
         index: usize,
         message: &Message,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let open = self.thinking_open.contains(&index);
         let summary = crate::core::tools::summary(&message.name, &message.args);
         let lines = message.content.lines().count();
         let content = message.content.clone();
+        let one_line = crate::core::tools::one_line;
         let (status, color) = if message.is_error {
-            (message.content.clone(), cx.theme().danger)
+            (one_line(&message.content), cx.theme().danger)
         } else if message.name == crate::core::tools::ASK_USER {
-            (format!("→ {}", message.content), cx.theme().foreground)
+            (
+                format!("→ {}", one_line(&message.content)),
+                cx.theme().foreground,
+            )
         } else {
             (format!("{lines} lines"), cx.theme().muted_foreground)
         };
@@ -202,23 +207,19 @@ impl Chat {
             .when(open, |this| {
                 this.child(
                     div()
-                        .id(("tool-out", index))
-                        .occlude()
                         .ml_2()
                         .pl_3()
-                        .max_h(px(220.))
+                        .min_w_0()
                         .border_l_2()
                         .border_color(cx.theme().border)
-                        .child(
-                            div()
-                                .text_xs()
-                                .font_family(MONO_FONT)
-                                .line_height(px(18.))
-                                .text_color(cx.theme().muted_foreground)
-                                .whitespace_normal()
-                                .child(crate::core::tools::clamp_lines(&content, 400))
-                                .overflow_y_scrollbar(),
-                        ),
+                        .text_color(cx.theme().muted_foreground)
+                        .child(crate::ui::code_block(
+                            ("tool-out", index),
+                            crate::core::tools::clamp_lines(&content, 400),
+                            px(220.),
+                            window,
+                            cx,
+                        )),
                 )
             })
     }

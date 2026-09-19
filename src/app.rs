@@ -700,13 +700,23 @@ impl Render for Chat {
                         cx,
                     ));
                 }
-                if let Some(card) = self.approval_card(cx) {
+                if let Some(card) = self.approval_card(window, cx) {
                     turn.push(card);
                 }
             }
             let rows: Vec<AnyElement> = turns
                 .into_iter()
-                .map(|turn| v_flex().w_full().gap_3().children(turn).into_any_element())
+                // min_w_0 + clipping keep an unbreakable line (a long command,
+                // a wide path) from widening the column past the composer.
+                .map(|turn| {
+                    v_flex()
+                        .w_full()
+                        .min_w_0()
+                        .overflow_hidden()
+                        .gap_3()
+                        .children(turn)
+                        .into_any_element()
+                })
                 .collect();
             // The scrollbar must sit outside the scrolling element, or it
             // scrolls away with the content.

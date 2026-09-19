@@ -17,7 +17,11 @@ impl Chat {
 
     /// The row under the messages while tools run: a progress line, or the
     /// card waiting on the user. `None` when nothing is queued.
-    pub(crate) fn approval_card(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+    pub(crate) fn approval_card(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
         let pending = self.pending.as_ref()?;
         let call = pending.calls.front()?;
         let ctx = tools::ToolContext {
@@ -121,24 +125,20 @@ impl Chat {
                     .child(title),
             )
             .child(
-                // Short box with its own scrollbar, so a long file does not
-                // stretch the chat.
+                // Scrolls only once the preview is long, so a one-line command
+                // does not sit in a tall empty panel.
                 div()
-                    .id("preview")
-                    .occlude()
-                    .h(px(180.))
+                    .p_2()
+                    .min_w_0()
                     .rounded(cx.theme().radius)
                     .bg(cx.theme().background)
-                    .child(
-                        div()
-                            .p_2()
-                            .text_xs()
-                            .font_family(MONO_FONT)
-                            .line_height(px(18.))
-                            .whitespace_normal()
-                            .child(tools::clamp_lines(&preview, 400))
-                            .overflow_y_scrollbar(),
-                    ),
+                    .child(crate::ui::code_block(
+                        "preview",
+                        tools::clamp_lines(&preview, 400),
+                        px(240.),
+                        window,
+                        cx,
+                    )),
             )
             .child(
                 h_flex()

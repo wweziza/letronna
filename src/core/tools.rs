@@ -58,10 +58,18 @@ pub fn find(name: &str) -> Option<Box<dyn Tool>> {
 
 pub fn parse_args(args: &str) -> Result<Value, String> {
     if args.trim().is_empty() {
-        Ok(json!({}))
-    } else {
-        serde_json::from_str(args).map_err(|e| format!("Invalid arguments: {e}"))
+        return Ok(json!({}));
     }
+    serde_json::from_str(args).map_err(|e| {
+        if e.is_eof() {
+            "The arguments were cut off before the call was complete. Send less \
+             content in one call: write the file in smaller pieces, or write a \
+             short version first and append to it."
+                .to_owned()
+        } else {
+            format!("Invalid arguments: {e}")
+        }
+    })
 }
 
 pub fn needs_approval(name: &str) -> bool {
@@ -123,7 +131,7 @@ pub fn clamp_lines(text: &str, max: usize) -> String {
 /// The argument the UI shows next to a tool name.
 pub fn summary(name: &str, args: &str) -> String {
     let v: Value = serde_json::from_str(args).unwrap_or(Value::Null);
-    match name {
+    let text = match name {
         "search" => v["query"]
             .as_str()
             .map(|q| format!("\"{q}\""))
@@ -131,7 +139,14 @@ pub fn summary(name: &str, args: &str) -> String {
         "run_command" => v["command"].as_str().unwrap_or_default().to_owned(),
         ASK_USER => v["question"].as_str().unwrap_or_default().to_owned(),
         _ => v["path"].as_str().unwrap_or(".").to_owned(),
-    }
+    };
+    one_line(&text)
+}
+
+/// Collapse whitespace so a multi-line command cannot spill out of the
+/// single-line row it is shown in.
+pub fn one_line(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// Where a write may land: inside the workspace only. The file need not
